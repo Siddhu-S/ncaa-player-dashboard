@@ -12,16 +12,21 @@ from data_engine import (
 
 HERE = Path(__file__).parent
 
-D2 = load_data(str(HERE / "data.csv"),            id_prefix="d2p")
+D2 = load_data(str(HERE / "d2_data_cleaned.csv"),            id_prefix="d2p")
 D1 = load_d1_data(str(HERE / "mbb_with_pca.csv"), id_prefix="d1p")
+D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
 
-d2_df          = D2["df"];  d2_conferences = D2["conferences"]
-d2_league_avg  = D2["league_avg"];  d2_similar_to = D2["similar_to"]
-D2_TOTAL       = len(d2_df)
+d2_df         = D2["df"];  d2_conferences = D2["conferences"]
+d2_league_avg = D2["league_avg"];  d2_similar_to = D2["similar_to"]
+D2_TOTAL      = len(d2_df)
 
-d1_df          = D1["df"];  d1_conferences = D1["conferences"]
-d1_league_avg  = D1["league_avg"];  d1_similar_to = D1["similar_to"]
-D1_TOTAL       = len(d1_df)
+d1_df         = D1["df"];  d1_conferences = D1["conferences"]
+d1_league_avg = D1["league_avg"];  d1_similar_to = D1["similar_to"]
+D1_TOTAL      = len(d1_df)
+
+d3_df         = D3["df"];  d3_conferences = D3["conferences"]
+d3_league_avg = D3["league_avg"];  d3_similar_to = D3["similar_to"]
+D3_TOTAL      = len(d3_df)
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -58,8 +63,15 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     row  = df[df["id"] == player_id].iloc[0]
     sims = similar_to_fn(player_id, n_sim=5)
     pc   = POS_COLOR.get(row["pos"], "#888")
-    sim_input = "d1_select_similar" if division_label == "D-I" else "d2_select_similar"
-    ppg_max = 30 if division_label == "D-I" else 32
+
+    if division_label == "D-I":
+        sim_input = "d1_select_similar"
+    elif division_label == "D-III":
+        sim_input = "d3_select_similar"
+    else:
+        sim_input = "d2_select_similar"
+
+    ppg_max  = 30 if division_label == "D-I" else 32
     starred  = player_id in watchlist
     star_icon  = "\u2605" if starred else "\u2606"
     star_label = "Remove from watchlist" if starred else "Add to watchlist"
@@ -351,9 +363,10 @@ app_ui = ui.page_fluid(
                 transition:color .15s, border-color .15s;
             }
             .tab-btn:hover     { color:var(--ink-2); }
-            .tab-btn.active-d2 { color:var(--accent); border-bottom-color:var(--accent); }
             .tab-btn.active-d1 { color:#4a9eed;       border-bottom-color:#4a9eed; }
-            .tab-btn.active-wl { color:#7cc47a;        border-bottom-color:#7cc47a; }
+            .tab-btn.active-d2 { color:var(--accent);  border-bottom-color:var(--accent); }
+            .tab-btn.active-d3 { color:#e8a44a;        border-bottom-color:#e8a44a; }
+            .tab-btn.active-wl { color:#7cc47a;         border-bottom-color:#7cc47a; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
 
             /* watchlist badge on tab button */
@@ -434,18 +447,12 @@ app_ui = ui.page_fluid(
             }
             .wl-remove:hover { color:var(--accent); }
 
-            /* ── Tab panels ──────────────────────────────────────
-               KEY TRICK: both panels stay in layout flow at full
-               size so Plotly measures real px on startup.
-               The inactive panel is clipped to h=0 + overflow:hidden
-               so slider tooltips (position:absolute children) cannot
-               escape and bleed onto the active tab.            */
+            /* ── Tab panels ────────────────────────────────────── */
             #tab-content {
                 flex:1; overflow:hidden;
                 display:flex; flex-direction:column;
             }
             .tab-panel {
-                /* collapsed but still in flow — Plotly can size itself */
                 flex:0; height:0; overflow:hidden;
                 display:flex; flex-direction:column;
                 min-height:0;
@@ -462,7 +469,6 @@ app_ui = ui.page_fluid(
             .sidebar {
                 overflow-y:auto; border-right:1px solid var(--rule);
                 padding:16px 14px 32px;
-                /* match original #sidebar styling */
                 background:var(--bg);
             }
             .plot-area    { display:flex; flex-direction:column; overflow:hidden; }
@@ -476,7 +482,7 @@ app_ui = ui.page_fluid(
             }
             .scatter-wrap { flex:1; overflow:hidden; }
 
-            /* ── Sidebar inputs — apply to both tabs via .sidebar class ── */
+            /* ── Sidebar inputs ── */
             .sidebar .form-control,
             .sidebar .selectize-input,
             .sidebar select {
@@ -494,13 +500,9 @@ app_ui = ui.page_fluid(
             .sidebar .irs--shiny .irs-min,
             .sidebar .irs--shiny .irs-max   { font-family:var(--mono); font-size:9.5px; color:var(--ink-2); }
 
-            /* ── Checkbox groups — hide native box, style label as compact row ── */
+            /* ── Checkbox groups ── */
             .sidebar .shiny-input-container { margin-bottom:0; }
-
-            /* Hide the actual checkbox input */
             .sidebar .checkbox input[type="checkbox"] { display:none !important; }
-
-            /* All checkbox labels: compact, monospace, small */
             .sidebar .checkbox label {
                 display:flex !important; align-items:center !important;
                 gap:6px !important; cursor:pointer;
@@ -514,13 +516,10 @@ app_ui = ui.page_fluid(
                 transition:color .1s;
             }
             .sidebar .checkbox label:hover { color:var(--ink) !important; }
-
-            /* Checked state — bold, full ink */
             .sidebar .checkbox input[type="checkbox"]:checked + span,
             .sidebar .checkbox input[type="checkbox"]:checked ~ span {
                 color:var(--ink) !important; font-weight:700 !important;
             }
-            /* Fake checkbox dot before label text */
             .sidebar .checkbox label::before {
                 content:""; display:inline-block; flex-shrink:0;
                 width:7px; height:7px; border-radius:50%;
@@ -531,8 +530,6 @@ app_ui = ui.page_fluid(
             .sidebar .checkbox:has(input:checked) label::before {
                 background:var(--accent); border-color:var(--accent);
             }
-
-            /* Stack checkboxes vertically */
             .sidebar .shiny-options-group {
                 display:flex !important; flex-direction:column !important;
                 gap:0 !important; flex-wrap:nowrap !important;
@@ -540,17 +537,12 @@ app_ui = ui.page_fluid(
             .sidebar .checkbox {
                 display:block !important; width:100%; margin:0 !important;
             }
-
-            /* Conference list — slightly smaller since names are longer */
             .sidebar [id$="_confs"] .checkbox label {
                 font-size:10px !important;
                 max-width:195px !important;
             }
 
-            /* ── D-I blue accent ──────────────────────────────── */
-            #d1-tab .accent { color:#4a9eed; }
-
-            /* ── Division badge in modal ──────────────────────── */
+            /* ── Division badge in modal ── */
             .div-badge {
                 font-size:10px; font-weight:700; letter-spacing:.12em;
                 text-transform:uppercase; border-radius:3px;
@@ -564,13 +556,11 @@ app_ui = ui.page_fluid(
                     p.classList.remove('active');
                 });
                 document.querySelectorAll('.tab-btn').forEach(function(b) {
-                    b.classList.remove('active-d1','active-d2','active-wl');
+                    b.classList.remove('active-d1','active-d2','active-d3','active-wl');
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
 
-                // Plotly needs a resize after its container goes from h=0 to full height.
-                // Two rAF calls ensure the browser has finished layout before we measure.
                 requestAnimationFrame(function() {
                     requestAnimationFrame(function() {
                         var panel = document.getElementById(tab+'-tab');
@@ -592,22 +582,29 @@ app_ui = ui.page_fluid(
                           class_="kicker"),
                    ui.div(ui.HTML("Player <em>Dashboard</em>"), class_="atlas-title")),
             ui.div({"class": "mast-meta"},
-                   ui.div(ui.div(str(D1_TOTAL),               class_="mast-stat-num"),
-                          ui.div("D-I Players",               class_="mast-stat-lbl"), class_="mast-stat"),
-                   ui.div(ui.div(str(d1_df["team"].nunique()), class_="mast-stat-num"),
-                          ui.div("D-I Teams",                 class_="mast-stat-lbl"), class_="mast-stat"),
-                   ui.div(ui.div(str(D2_TOTAL),               class_="mast-stat-num"),
-                          ui.div("D-II Players",              class_="mast-stat-lbl"), class_="mast-stat"),
-                   ui.div(ui.div(str(d2_df["team"].nunique()), class_="mast-stat-num"),
-                          ui.div("D-II Teams",                class_="mast-stat-lbl"), class_="mast-stat")),
+                   ui.div(ui.div(str(D1_TOTAL),                class_="mast-stat-num"),
+                          ui.div("D-I Players",                class_="mast-stat-lbl"), class_="mast-stat"),
+                   ui.div(ui.div(str(d1_df["team"].nunique()),  class_="mast-stat-num"),
+                          ui.div("D-I Teams",                  class_="mast-stat-lbl"), class_="mast-stat"),
+                   ui.div(ui.div(str(D2_TOTAL),                class_="mast-stat-num"),
+                          ui.div("D-II Players",               class_="mast-stat-lbl"), class_="mast-stat"),
+                   ui.div(ui.div(str(d2_df["team"].nunique()),  class_="mast-stat-num"),
+                          ui.div("D-II Teams",                 class_="mast-stat-lbl"), class_="mast-stat"),
+                   ui.div(ui.div(str(D3_TOTAL),                class_="mast-stat-num"),
+                          ui.div("D-III Players",              class_="mast-stat-lbl"), class_="mast-stat"),
+                   ui.div(ui.div(str(d3_df["team"].nunique()),  class_="mast-stat-num"),
+                          ui.div("D-III Teams",                class_="mast-stat-lbl"), class_="mast-stat")),
         ),
 
         ui.div({"id": "tab-switcher"},
-               ui.tags.button("Division I",  id="btn-d1", class_="tab-btn",
+               ui.tags.button("Division I",   id="btn-d1", class_="tab-btn",
                               onclick="switchTab('d1')"),
                ui.div({"class": "tab-sep"}),
-               ui.tags.button("Division II", id="btn-d2", class_="tab-btn active-d2",
+               ui.tags.button("Division II",  id="btn-d2", class_="tab-btn active-d2",
                               onclick="switchTab('d2')"),
+               ui.div({"class": "tab-sep"}),
+               ui.tags.button("Division III", id="btn-d3", class_="tab-btn",
+                              onclick="switchTab('d3')"),
                ui.div({"class": "tab-sep"}),
                ui.tags.button(
                    ui.HTML('Watchlist <span id="wl-badge" class="wl-badge" style="display:none">0</span>'),
@@ -615,14 +612,21 @@ app_ui = ui.page_fluid(
                    onclick="switchTab('wl')")),
 
         ui.div({"id": "tab-content"},
-            ui.div({"id": "d2-tab", "class": "tab-panel active"},
-                   ui.div({"class": "body-grid"},
-                          make_sidebar("d2", d2_df, d2_conferences),
-                          make_plot_area("d2"))),
+
             ui.div({"id": "d1-tab", "class": "tab-panel"},
                    ui.div({"class": "body-grid"},
                           make_sidebar("d1", d1_df, d1_conferences),
                           make_plot_area("d1"))),
+
+            ui.div({"id": "d2-tab", "class": "tab-panel active"},
+                   ui.div({"class": "body-grid"},
+                          make_sidebar("d2", d2_df, d2_conferences),
+                          make_plot_area("d2"))),
+
+            ui.div({"id": "d3-tab", "class": "tab-panel"},
+                   ui.div({"class": "body-grid"},
+                          make_sidebar("d3", d3_df, d3_conferences),
+                          make_plot_area("d3"))),
 
             ui.div({"id": "wl-tab", "class": "tab-panel"},
                    ui.div({"class": "wl-shell"},
@@ -633,8 +637,9 @@ app_ui = ui.page_fluid(
         ),
     ),
 
-    ui.output_ui("d2_modal_trigger"),
     ui.output_ui("d1_modal_trigger"),
+    ui.output_ui("d2_modal_trigger"),
+    ui.output_ui("d3_modal_trigger"),
 )
 
 
@@ -644,20 +649,20 @@ app_ui = ui.page_fluid(
 
 def server(input, output, session):
 
-    d2_sel      = reactive.Value(None)   # highlighted dot on scatter
-    d2_dim      = reactive.Value(set())
-    d1_sel      = reactive.Value(None)
-    d1_dim      = reactive.Value(set())
-    watchlist   = reactive.Value(set())  # set of player IDs (cross-division)
-    # Modal signal: a (player_id, counter) tuple. Counter increments on every
-    # click so the same player can be re-opened without ReactiveValue skipping
-    # the invalidation (which happens when you set the same value twice).
-    modal_req   = reactive.Value(None)
+    d1_sel    = reactive.Value(None)
+    d1_dim    = reactive.Value(set())
+    d2_sel    = reactive.Value(None)
+    d2_dim    = reactive.Value(set())
+    d3_sel    = reactive.Value(None)
+    d3_dim    = reactive.Value(set())
+    watchlist = reactive.Value(set())
+    modal_req = reactive.Value(None)
 
-    d2_fig = go.FigureWidget()
     d1_fig = go.FigureWidget()
+    d2_fig = go.FigureWidget()
+    d3_fig = go.FigureWidget()
 
-    # ── Watchlist toggle (fired by star button in modal) ──────────────────
+    # ── Watchlist toggle ──────────────────────────────────────────────────
     @reactive.effect
     @reactive.event(input.toggle_watchlist)
     def _toggle_watchlist():
@@ -665,138 +670,20 @@ def server(input, output, session):
         curr = set(watchlist.get())
         curr.discard(pid) if pid in curr else curr.add(pid)
         watchlist.set(curr)
-        # Re-open the modal with updated star state by setting modal_req.
-        # _open_modal will read watchlist fresh (it's not isolated there).
         import random
         modal_req.set((pid, random.random()))
 
-    # ── legend dim ────────────────────────────────────────────────────────
+    # ── Legend dim (shared toggle_dim input across all three tabs) ────────
     @reactive.effect
     @reactive.event(input.toggle_dim)
-    def _d2_toggle_dim():
-        pos  = input.toggle_dim()
-        curr = set(d2_dim.get())
-        curr.discard(pos) if pos in curr else curr.add(pos)
-        d2_dim.set(curr)
+    def _all_dim():
+        pos = input.toggle_dim()
+        for rv in (d1_dim, d2_dim, d3_dim):
+            curr = set(rv.get())
+            curr.discard(pos) if pos in curr else curr.add(pos)
+            rv.set(curr)
 
-    @reactive.effect
-    @reactive.event(input.toggle_dim)
-    def _d1_toggle_dim():
-        pos  = input.toggle_dim()
-        curr = set(d1_dim.get())
-        curr.discard(pos) if pos in curr else curr.add(pos)
-        d1_dim.set(curr)
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # D-II
-    # ═══════════════════════════════════════════════════════════════════════
-
-    @reactive.effect
-    @reactive.event(input.d2_clear_pos)
-    def _d2_clear_pos():
-        ui.update_checkbox_group("d2_positions", selected=[])
-
-    @reactive.effect
-    @reactive.event(input.d2_clear_cls)
-    def _d2_clear_cls():
-        ui.update_checkbox_group("d2_classes", selected=[])
-
-    @reactive.effect
-    @reactive.event(input.d2_clear_conf)
-    def _d2_clear_conf():
-        ui.update_checkbox_group("d2_confs", selected=[])
-        ui.update_select("d2_team", selected="All teams")
-
-    @reactive.effect
-    @reactive.event(input.d2_select_similar)
-    def _d2_select_similar():
-        sid = input.d2_select_similar()
-        if sid:
-            d2_sel.set(sid)
-            ui.modal_remove()
-            import random
-            modal_req.set((sid, random.random()))
-
-    @reactive.calc
-    def d2_filtered():
-        d = d2_df.copy()
-        q = (input.d2_q() or "").strip().lower()
-        if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
-        ps = list(input.d2_positions() or [])
-        if ps: d = d[d["pos"].isin(ps)]
-        cs = list(input.d2_classes() or [])
-        if cs: d = d[d["cls"].isin(cs)]
-        xs = list(input.d2_confs() or [])
-        if xs: d = d[d["conf"].isin(xs)]
-        t = input.d2_team()
-        if t and t != "All teams": d = d[d["team"] == t]
-        lo, hi = input.d2_mpg();         d = d[(d["mpg"]        >= lo) & (d["mpg"]        <= hi)]
-        lo, hi = input.d2_ppg_range();   d = d[(d["ppg"]        >= lo) & (d["ppg"]        <= hi)]
-        lo, hi = input.d2_efg();         d = d[(d["efg"]        >= lo) & (d["efg"]        <= hi)]
-        lo, hi = input.d2_tp_range();    d = d[(d["tp"]         >= lo) & (d["tp"]         <= hi)]
-        lo, hi = input.d2_three_share(); d = d[(d["three_share"] >= lo) & (d["three_share"] <= hi)]
-        lo, hi = input.d2_apg_range();   d = d[(d["apg"]        >= lo) & (d["apg"]        <= hi)]
-        lo, hi = input.d2_ast_tov();     d = d[(d["ast_tov"]    >= lo) & (d["ast_tov"]    <= hi)]
-        lo, hi = input.d2_height();      d = d[(d["heightIn"]   >= lo) & (d["heightIn"]   <= hi)]
-        return d
-
-    @reactive.calc
-    def d2_plot_df():
-        ids = set(d2_filtered()["id"])
-        sid = d2_sel.get()
-        if sid: ids.add(sid)
-        return d2_df[d2_df["id"].isin(ids)]
-
-    @output
-    @render.text
-    def d2_filter_count():
-        return f"{len(d2_filtered())} / {D2_TOTAL}"
-
-    @output
-    @render.ui
-    def d2_legend_ui():
-        return ui.HTML(legend_html(d2_dim.get()))
-
-    @output
-    @render.ui
-    def d2_plot_meta():
-        sid = d2_sel.get()
-        if sid is not None:
-            row = d2_df[d2_df["id"] == sid]
-            if not row.empty:
-                return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
-        return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
-
-    @render_widget
-    def d2_scatter():
-        return d2_fig
-
-    @reactive.effect
-    def _d2_sync():
-        traces = build_traces(d2_plot_df(), d2_sel.get(), d2_dim.get())
-        layout = build_layout(d2_plot_df())
-        with d2_fig.batch_update():
-            d2_fig.data = []
-            for t in traces: d2_fig.add_trace(t)
-            d2_fig.update_layout(layout)
-        for trace in d2_fig.data:
-            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
-                trace.on_click(_d2_clicked)
-
-    def _d2_clicked(trace, points, selector):
-        if not points or not points.point_inds: return
-        cd = trace.customdata[points.point_inds[0]]
-        if cd is not None and len(cd) >= 8:
-            pid = str(cd[7])
-            d2_sel.set(pid)
-            # Use a tuple with a random token so ReactiveValue always invalidates,
-            # even when the same player is clicked twice in a row.
-            import random
-            modal_req.set((pid, random.random()))
-
-    # Single effect that opens the modal for whichever player was just clicked.
-    # Reacts to modal_req (a (pid, token) tuple) so it fires on every click,
-    # even repeated clicks on the same player.
+    # ── Single modal opener — handles d1p / d2p / d3p prefixes ───────────
     @reactive.effect
     @reactive.event(modal_req)
     def _open_modal():
@@ -806,18 +693,22 @@ def server(input, output, session):
         wl = watchlist.get()
         if pid.startswith("d1"):
             df_, la_, sf_, div_ = d1_df, d1_league_avg, d1_similar_to, "D-I"
+        elif pid.startswith("d3"):
+            df_, la_, sf_, div_ = d3_df, d3_league_avg, d3_similar_to, "D-III"
         else:
             df_, la_, sf_, div_ = d2_df, d2_league_avg, d2_similar_to, "D-II"
         row = df_[df_["id"] == pid]
         if row.empty: return
         ui.modal_show(make_detail_modal(pid, df_, la_, sf_, div_, wl))
 
-    # Keep these output stubs so Shiny doesn't complain about missing output IDs
-    # declared in the UI (ui.output_ui("d2_modal_trigger") etc.)
-    @output
-    @render.ui
-    def d2_modal_trigger():
-        return ui.div()
+    # ── Open modal from watchlist card ────────────────────────────────────
+    @reactive.effect
+    @reactive.event(input.wl_open_player)
+    def _wl_open_player():
+        pid = input.wl_open_player()
+        if not pid: return
+        import random
+        modal_req.set((pid, random.random()))
 
     # ═══════════════════════════════════════════════════════════════════════
     # D-I
@@ -862,14 +753,14 @@ def server(input, output, session):
         if xs: d = d[d["conf"].isin(xs)]
         t = input.d1_team()
         if t and t != "All teams": d = d[d["team"] == t]
-        lo, hi = input.d1_mpg();         d = d[(d["mpg"]        >= lo) & (d["mpg"]        <= hi)]
-        lo, hi = input.d1_ppg_range();   d = d[(d["ppg"]        >= lo) & (d["ppg"]        <= hi)]
-        lo, hi = input.d1_efg();         d = d[(d["efg"]        >= lo) & (d["efg"]        <= hi)]
-        lo, hi = input.d1_tp_range();    d = d[(d["tp"]         >= lo) & (d["tp"]         <= hi)]
-        lo, hi = input.d1_three_share(); d = d[(d["three_share"] >= lo) & (d["three_share"] <= hi)]
-        lo, hi = input.d1_apg_range();   d = d[(d["apg"]        >= lo) & (d["apg"]        <= hi)]
-        lo, hi = input.d1_ast_tov();     d = d[(d["ast_tov"]    >= lo) & (d["ast_tov"]    <= hi)]
-        lo, hi = input.d1_height();      d = d[(d["heightIn"]   >= lo) & (d["heightIn"]   <= hi)]
+        lo, hi = input.d1_mpg();         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
+        lo, hi = input.d1_ppg_range();   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
+        lo, hi = input.d1_efg();         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
+        lo, hi = input.d1_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
+        lo, hi = input.d1_three_share(); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
+        lo, hi = input.d1_apg_range();   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
+        lo, hi = input.d1_ast_tov();     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
+        lo, hi = input.d1_height();      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
         return d
 
     @reactive.calc
@@ -919,18 +810,236 @@ def server(input, output, session):
         if not points or not points.point_inds: return
         cd = trace.customdata[points.point_inds[0]]
         if cd is not None and len(cd) >= 8:
-            pid = str(cd[7])
-            d1_sel.set(pid)
             import random
-            modal_req.set((pid, random.random()))
+            d1_sel.set(str(cd[7]))
+            modal_req.set((str(cd[7]), random.random()))
 
     @output
     @render.ui
     def d1_modal_trigger():
         return ui.div()
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # D-II
+    # ═══════════════════════════════════════════════════════════════════════
 
-    # ── Watchlist outputs ─────────────────────────────────────────────────
+    @reactive.effect
+    @reactive.event(input.d2_clear_pos)
+    def _d2_clear_pos():
+        ui.update_checkbox_group("d2_positions", selected=[])
+
+    @reactive.effect
+    @reactive.event(input.d2_clear_cls)
+    def _d2_clear_cls():
+        ui.update_checkbox_group("d2_classes", selected=[])
+
+    @reactive.effect
+    @reactive.event(input.d2_clear_conf)
+    def _d2_clear_conf():
+        ui.update_checkbox_group("d2_confs", selected=[])
+        ui.update_select("d2_team", selected="All teams")
+
+    @reactive.effect
+    @reactive.event(input.d2_select_similar)
+    def _d2_select_similar():
+        sid = input.d2_select_similar()
+        if sid:
+            d2_sel.set(sid)
+            ui.modal_remove()
+            import random
+            modal_req.set((sid, random.random()))
+
+    @reactive.calc
+    def d2_filtered():
+        d = d2_df.copy()
+        q = (input.d2_q() or "").strip().lower()
+        if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
+        ps = list(input.d2_positions() or [])
+        if ps: d = d[d["pos"].isin(ps)]
+        cs = list(input.d2_classes() or [])
+        if cs: d = d[d["cls"].isin(cs)]
+        xs = list(input.d2_confs() or [])
+        if xs: d = d[d["conf"].isin(xs)]
+        t = input.d2_team()
+        if t and t != "All teams": d = d[d["team"] == t]
+        lo, hi = input.d2_mpg();         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
+        lo, hi = input.d2_ppg_range();   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
+        lo, hi = input.d2_efg();         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
+        lo, hi = input.d2_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
+        lo, hi = input.d2_three_share(); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
+        lo, hi = input.d2_apg_range();   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
+        lo, hi = input.d2_ast_tov();     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
+        lo, hi = input.d2_height();      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
+        return d
+
+    @reactive.calc
+    def d2_plot_df():
+        ids = set(d2_filtered()["id"])
+        sid = d2_sel.get()
+        if sid: ids.add(sid)
+        return d2_df[d2_df["id"].isin(ids)]
+
+    @output
+    @render.text
+    def d2_filter_count():
+        return f"{len(d2_filtered())} / {D2_TOTAL}"
+
+    @output
+    @render.ui
+    def d2_legend_ui():
+        return ui.HTML(legend_html(d2_dim.get()))
+
+    @output
+    @render.ui
+    def d2_plot_meta():
+        sid = d2_sel.get()
+        if sid is not None:
+            row = d2_df[d2_df["id"] == sid]
+            if not row.empty:
+                return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
+        return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
+
+    @render_widget
+    def d2_scatter():
+        return d2_fig
+
+    @reactive.effect
+    def _d2_sync():
+        traces = build_traces(d2_plot_df(), d2_sel.get(), d2_dim.get())
+        layout = build_layout(d2_plot_df())
+        with d2_fig.batch_update():
+            d2_fig.data = []
+            for t in traces: d2_fig.add_trace(t)
+            d2_fig.update_layout(layout)
+        for trace in d2_fig.data:
+            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
+                trace.on_click(_d2_clicked)
+
+    def _d2_clicked(trace, points, selector):
+        if not points or not points.point_inds: return
+        cd = trace.customdata[points.point_inds[0]]
+        if cd is not None and len(cd) >= 8:
+            import random
+            d2_sel.set(str(cd[7]))
+            modal_req.set((str(cd[7]), random.random()))
+
+    @output
+    @render.ui
+    def d2_modal_trigger():
+        return ui.div()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # D-III
+    # ═══════════════════════════════════════════════════════════════════════
+
+    @reactive.effect
+    @reactive.event(input.d3_clear_pos)
+    def _d3_clear_pos():
+        ui.update_checkbox_group("d3_positions", selected=[])
+
+    @reactive.effect
+    @reactive.event(input.d3_clear_cls)
+    def _d3_clear_cls():
+        ui.update_checkbox_group("d3_classes", selected=[])
+
+    @reactive.effect
+    @reactive.event(input.d3_clear_conf)
+    def _d3_clear_conf():
+        ui.update_checkbox_group("d3_confs", selected=[])
+        ui.update_select("d3_team", selected="All teams")
+
+    @reactive.effect
+    @reactive.event(input.d3_select_similar)
+    def _d3_select_similar():
+        sid = input.d3_select_similar()
+        if sid:
+            d3_sel.set(sid)
+            ui.modal_remove()
+            import random
+            modal_req.set((sid, random.random()))
+
+    @reactive.calc
+    def d3_filtered():
+        d = d3_df.copy()
+        q = (input.d3_q() or "").strip().lower()
+        if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
+        ps = list(input.d3_positions() or [])
+        if ps: d = d[d["pos"].isin(ps)]
+        cs = list(input.d3_classes() or [])
+        if cs: d = d[d["cls"].isin(cs)]
+        xs = list(input.d3_confs() or [])
+        if xs: d = d[d["conf"].isin(xs)]
+        t = input.d3_team()
+        if t and t != "All teams": d = d[d["team"] == t]
+        lo, hi = input.d3_mpg();         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
+        lo, hi = input.d3_ppg_range();   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
+        lo, hi = input.d3_efg();         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
+        lo, hi = input.d3_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
+        lo, hi = input.d3_three_share(); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
+        lo, hi = input.d3_apg_range();   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
+        lo, hi = input.d3_ast_tov();     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
+        lo, hi = input.d3_height();      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
+        return d
+
+    @reactive.calc
+    def d3_plot_df():
+        ids = set(d3_filtered()["id"])
+        sid = d3_sel.get()
+        if sid: ids.add(sid)
+        return d3_df[d3_df["id"].isin(ids)]
+
+    @output
+    @render.text
+    def d3_filter_count():
+        return f"{len(d3_filtered())} / {D3_TOTAL}"
+
+    @output
+    @render.ui
+    def d3_legend_ui():
+        return ui.HTML(legend_html(d3_dim.get()))
+
+    @output
+    @render.ui
+    def d3_plot_meta():
+        sid = d3_sel.get()
+        if sid is not None:
+            row = d3_df[d3_df["id"] == sid]
+            if not row.empty:
+                return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
+        return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
+
+    @render_widget
+    def d3_scatter():
+        return d3_fig
+
+    @reactive.effect
+    def _d3_sync():
+        traces = build_traces(d3_plot_df(), d3_sel.get(), d3_dim.get())
+        layout = build_layout(d3_plot_df())
+        with d3_fig.batch_update():
+            d3_fig.data = []
+            for t in traces: d3_fig.add_trace(t)
+            d3_fig.update_layout(layout)
+        for trace in d3_fig.data:
+            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
+                trace.on_click(_d3_clicked)
+
+    def _d3_clicked(trace, points, selector):
+        if not points or not points.point_inds: return
+        cd = trace.customdata[points.point_inds[0]]
+        if cd is not None and len(cd) >= 8:
+            import random
+            d3_sel.set(str(cd[7]))
+            modal_req.set((str(cd[7]), random.random()))
+
+    @output
+    @render.ui
+    def d3_modal_trigger():
+        return ui.div()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # WATCHLIST
+    # ═══════════════════════════════════════════════════════════════════════
 
     @output
     @render.text
@@ -941,7 +1050,7 @@ def server(input, output, session):
     @output
     @render.ui
     def watchlist_ui():
-        wl  = watchlist.get()
+        wl = watchlist.get()
         if not wl:
             return ui.div(
                 ui.tags.script("var b=document.getElementById('wl-badge');if(b){b.style.display='none';}"),
@@ -953,24 +1062,21 @@ def server(input, output, session):
 
         cards = []
         for pid in wl:
-            # Look up in whichever dataset this id belongs to
             if pid.startswith("d1"):
                 df_, div_ = d1_df, "D-I"
+            elif pid.startswith("d3"):
+                df_, div_ = d3_df, "D-III"
             else:
                 df_, div_ = d2_df, "D-II"
             row_ = df_[df_["id"] == pid]
             if row_.empty:
                 continue
-            r    = row_.iloc[0]
-            pc_  = POS_COLOR.get(r["pos"], "#888")
-            # Which modal input to fire on card click
-            open_js = f"Shiny.setInputValue('{'d1' if pid.startswith('d1') else 'd2'}_select_similar','{pid}',{{priority:'event'}})"
-            # Actually we want to open the modal directly — reuse the sel reactive
+            r   = row_.iloc[0]
+            pc_ = POS_COLOR.get(r["pos"], "#888")
             open_js = f"Shiny.setInputValue('wl_open_player','{pid}',{{priority:'event'}})"
             cards.append(
                 ui.div(
                     {"class": "wl-card", "onclick": open_js},
-                    # Remove button (stops click propagating to card)
                     ui.tags.button(
                         {"class": "wl-remove",
                          "title": "Remove from watchlist",
@@ -993,21 +1099,13 @@ def server(input, output, session):
                            ui.div(ui.div(f"{r['fg']*100:.0f}%", class_="n"),
                                   ui.div("FG%", class_="l"), class_="wl-stat")),
                 ))
+
         n   = len(wl)
         vis = "inline-block" if n else "none"
         js  = f"var b=document.getElementById('wl-badge');if(b){{b.textContent='{n}';b.style.display='{vis}';}}"
         return ui.div(
             ui.tags.script(js),
             ui.div({"class": "wl-grid"}, *cards))
-
-    # Open player modal from watchlist card click
-    @reactive.effect
-    @reactive.event(input.wl_open_player)
-    def _wl_open_player():
-        pid = input.wl_open_player()
-        if not pid: return
-        import random
-        modal_req.set((pid, random.random()))
 
 
 app = App(app_ui, server, static_assets=HERE / "www")

@@ -93,7 +93,7 @@ def normalize_class(s: str) -> str:
 
 
 def refine_position(raw: str) -> str:
-    r = (raw or "").strip().upper()
+    r = ("" if pd.isna(raw) else str(raw)).strip().upper()
     if r in ("G", "G/F", "F", "F/C", "C"):
         return r
     if r.startswith("G/F") or r.startswith("GF"): return "G/F"
