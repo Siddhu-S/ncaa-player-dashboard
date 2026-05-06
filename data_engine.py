@@ -136,12 +136,8 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
     # (can happen with tiny datasets or near-constant PCs)
     cov   += np.eye(len(SIM_KEYS)) * 1e-6
     VI     = np.linalg.inv(cov)          # inverse covariance matrix
-<<<<<<< HEAD
     
     
-=======
-    '''
->>>>>>> 7765501 (fixed TSpct)
     # z-score PCs for similarity
     for k in SIM_KEYS:
         mu = df[k].mean()
@@ -150,7 +146,7 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
 
     Z_cols = [f"_z_{k}" for k in SIM_KEYS]
     Z      = df[Z_cols].values
-'''
+
     # league averages
     avg_cols = ["ppg","rpg","apg","spg","bpg","tov","fg","tp","ft","ts","usg","mpg"]
     league_avg = {c: float(df[c].mean()) for c in avg_cols}
@@ -176,15 +172,10 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
         i    = idx[0]
         vec  = PC_mat[i].reshape(1, -1)          # (1, 4)
 
-<<<<<<< HEAD
         if metric == "euclidean":
             dists = cdist(vec, PC_mat, metric="euclidean").flatten()
         else:
             dists = cdist(vec, PC_mat, metric="mahalanobis", VI=VI).flatten()
-=======
-        # cdist with Mahalanobis returns shape (1, N)
-        dists = cdist(vec, PC_mat, metric="mahalanobis", VI=VI).flatten()
->>>>>>> 7765501 (fixed TSpct)
         dists[i] = np.inf
 
         sorted_idx = np.argsort(dists)
