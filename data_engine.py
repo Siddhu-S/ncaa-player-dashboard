@@ -245,6 +245,9 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
     df["orb"]          = n("ORBPG")
     df["drb"]          = n("DRBPG")
     df["fg"]           = n("FG%")          # 0-1
+    two_made           = n("FGM") - n("3PTM")
+    two_att            = n("FGA") - n("3PTA")
+    df["two_pct"]      = (two_made / two_att.replace(0, np.nan)).fillna(0).clip(0, 1)
     df["tp"]           = n("3PT%")         # 0-1
     df["ft"]           = n("FT%")          # 0-1
     df["ts"]           = n("TS_pct")       # 0-1
@@ -327,6 +330,7 @@ def load_d1_data(csv_path: str, id_prefix: str = "d1p") -> dict:
     #   eFG, TS_pct  → 0-100  →  /100
     #   3P_pct, FT_pct → 0-1  →  keep
     df["fg"]  = n("eFG") / 100.0        # best proxy for overall FG; eFG scaled 0-100
+    df["two_pct"] = n("2P_pct")          # already 0-1
     df["tp"]  = n("3P_pct")             # already 0-1
     df["ft"]  = n("FT_pct")             # already 0-1
     df["ts"]  = n("TS_pct") / 100.0     # scaled 0-100 → 0-1

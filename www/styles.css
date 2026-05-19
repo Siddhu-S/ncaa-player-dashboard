@@ -436,6 +436,33 @@ html, body {
 }
 .arch-score-fill { height: 100%; min-width: 2px; }
 
+.qual-diag {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule-2);
+}
+.qual-diag-title {
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  margin-bottom: 6px;
+}
+.qual-diag-row {
+  color: var(--ink-3);
+  font-size: 11px;
+  line-height: 1.35;
+  margin-bottom: 5px;
+}
+.qual-note {
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-bottom: 7px;
+}
+.qual-note b { color: var(--ink-2); }
+
 .col-title     { font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; border-bottom: 1px solid var(--ink); padding-bottom: 5px; margin-bottom: 10px; }
 .col-title .sub { font-family: var(--serif); font-style: italic; text-transform: none; letter-spacing: 0; color: var(--ink-2); font-weight: 400; margin-left: 8px; font-size: 10.5px; }
 

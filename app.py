@@ -49,6 +49,74 @@ ARCHETYPE_SHORT_LABEL = {
     "2-4 Interchangeable Wing": "2-4 Wing",
     "5 / Stretch 4 / Big Wing": "F/C Stretch",
 }
+QUALIFICATION_FILTERS = {
+    "none": "None",
+    "general": "General Player",
+    "pg": "PG / Combo Guard",
+    "wing": "2-4 Interchangeable Wing",
+    "big": "5 / Stretch 4 / Big Wing",
+}
+QUALIFICATION_FILTER_COLUMNS = {
+    "general": "qual_general",
+    "pg": "qual_pg_combo",
+    "wing": "qual_wing_2_4",
+    "big": "qual_stretch_big",
+}
+QUALIFICATION_CONFIG = {
+    "thresholds": {
+        "general": {
+            "ast_pctile": 70,
+            "efg": 0.500,
+            "three_pct": 0.300,
+            "ast_tov_pctile": 50,
+            "guard_dreb_raw": 10,
+            "nonguard_dreb_raw": 15,
+            "exception_ast_pctile": 85,
+            "exception_dreb_pctile": 85,
+        },
+        "pg": {
+            "ast_pctile": 70,
+            "ast_tov_pctile": 70,
+            "three_pct": 0.330,
+            "three_rate": 0.300,
+            "exception_two_pct_pctile": 70,
+        },
+        "wing": {
+            "dreb_pctile": 70,
+            "three_pct": 0.330,
+            "three_rate": 0.300,
+            "ast_tov_pctile": 50,
+        },
+        "big": {
+            "height": 79,
+            "position": "F/C",
+            "dreb_pctile": 70,
+            "three_pct": 0.300,
+            "three_rate": 0.250,
+            "ast_tov_pctile": 50,
+        },
+    },
+    "weights": {
+        "pg": {
+            "AST_pct_pctile": 0.30,
+            "AST_TOV_pctile": 0.30,
+            "three_profile_pg_pctile": 0.20,
+            "2P_pct_pctile": 0.20,
+        },
+        "wing": {
+            "DRB_pct_pctile": 0.30,
+            "eFG_pctile": 0.25,
+            "three_profile_wing_pctile": 0.25,
+            "AST_TOV_pctile": 0.20,
+        },
+        "big": {
+            "DRB_pct_pctile": 0.40,
+            "three_profile_big_pctile": 0.20,
+            "eFG_pctile": 0.20,
+            "AST_TOV_pctile": 0.20,
+        },
+    },
+}
 ARCHETYPE_PCA_FEATURES = [
     "pct_assist_creation",
     "pct_three_pct",
@@ -71,63 +139,208 @@ def add_archetype_columns(dfs):
     def pct(group_cols, col):
         return all_df.groupby(group_cols)[col].rank(pct=True, method="average") * 100
 
-    all_df["pct_assist_creation"] = pct("_arch_division", "assist_creation")
-    all_df["pct_three_pct"] = pct("_arch_division", "tp")
-    all_df["pct_three_rate"] = pct("_arch_division", "three_share")
-    all_df["pct_ast_tov"] = pct("_arch_division", "ast_tov")
-    all_df["pct_efg"] = pct("_arch_division", "efg")
+    all_df["AST_pct_pctile"] = pct("_arch_division", "assist_creation")
+    all_df["3P_pct_pctile"] = pct("_arch_division", "tp")
+    all_df["3P_rate_pctile"] = pct("_arch_division", "three_share")
+    all_df["AST_TOV_pctile"] = pct("_arch_division", "ast_tov")
+    all_df["eFG_pctile"] = pct("_arch_division", "efg")
+    all_df["DRB_pct_pctile"] = pct("_arch_division", "dreb_arch")
+    all_df["2P_pct_pctile"] = pct("_arch_division", "two_pct")
+    all_df["pct_assist_creation"] = all_df["AST_pct_pctile"]
+    all_df["pct_three_pct"] = all_df["3P_pct_pctile"]
+    all_df["pct_three_rate"] = all_df["3P_rate_pctile"]
+    all_df["pct_ast_tov"] = all_df["AST_TOV_pctile"]
+    all_df["pct_efg"] = all_df["eFG_pctile"]
     all_df["pct_dreb_pos_adj"] = pct(["_arch_division", "pos"], "dreb_arch")
     all_df["pct_size"] = pct("_arch_division", "heightIn")
+    all_df["three_profile"] = (all_df["3P_pct_pctile"] + all_df["3P_rate_pctile"]) / 2
 
-    all_df["meets_pg_preferred"] = (
-        (all_df["pct_assist_creation"] >= 70)
-        & (all_df["tp"] >= 0.330)
-        & (all_df["three_share"] >= 0.300)
-        & (all_df["ast_tov"] > 1.0)
-    )
-    all_df["meets_wing_preferred"] = (
-        (all_df["pct_dreb_pos_adj"] >= 60)
-        & (all_df["tp"] >= 0.330)
-        & (all_df["three_share"] >= 0.300)
-        & (all_df["ast_tov"] > 1.0)
-    )
-    all_df["meets_big_preferred"] = (
-        (all_df["heightIn"] >= 79)
-        & (all_df["pct_dreb_pos_adj"] >= 60)
-        & (all_df["tp"] >= 0.300)
-        & (all_df["three_share"] >= 0.250)
-        & (all_df["ast_tov"] > 1.0)
+    t = QUALIFICATION_CONFIG["thresholds"]
+    is_guard = all_df["pos"].isin(["G", "G/F"])
+    has_true_dreb_pct = all_df["dreb_source"].eq("DRB_pct")
+    dreb_raw_standard = np.where(
+        has_true_dreb_pct,
+        np.where(
+            is_guard,
+            all_df["dreb_arch"] >= t["general"]["guard_dreb_raw"],
+            all_df["dreb_arch"] >= t["general"]["nonguard_dreb_raw"],
+        ),
+        all_df["DRB_pct_pctile"] >= t["general"]["ast_tov_pctile"],
     )
 
+    all_df["qual_general_standard"] = (
+        (all_df["AST_pct_pctile"] >= t["general"]["ast_pctile"])
+        & (all_df["efg"] >= t["general"]["efg"])
+        & (all_df["tp"] >= t["general"]["three_pct"])
+        & (all_df["AST_TOV_pctile"] >= t["general"]["ast_tov_pctile"])
+        & dreb_raw_standard
+    )
+    all_df["qual_general_exception"] = (
+        (all_df["AST_pct_pctile"] >= t["general"]["exception_ast_pctile"])
+        & (all_df["DRB_pct_pctile"] >= t["general"]["exception_dreb_pctile"])
+        & (all_df["AST_TOV_pctile"] >= t["general"]["ast_tov_pctile"])
+    )
+    all_df["qual_general"] = all_df["qual_general_standard"] | all_df["qual_general_exception"]
+
+    all_df["qual_pg_standard_path"] = (
+        (all_df["AST_pct_pctile"] >= t["pg"]["ast_pctile"])
+        & (all_df["AST_TOV_pctile"] >= t["pg"]["ast_tov_pctile"])
+        & (all_df["tp"] >= t["pg"]["three_pct"])
+        & (all_df["three_share"] >= t["pg"]["three_rate"])
+    )
+    all_df["qual_pg_exception_path"] = (
+        (all_df["AST_pct_pctile"] >= t["pg"]["ast_pctile"])
+        & (all_df["AST_TOV_pctile"] >= t["pg"]["ast_tov_pctile"])
+        & (all_df["2P_pct_pctile"] >= t["pg"]["exception_two_pct_pctile"])
+    )
+    all_df["qual_pg_standard"] = all_df["qual_pg_standard_path"] & all_df["qual_general"]
+    all_df["qual_pg_exception"] = all_df["qual_pg_exception_path"] & all_df["qual_general"]
+    all_df["qual_pg_combo"] = all_df["qual_pg_standard"] | all_df["qual_pg_exception"]
+
+    all_df["qual_wing_standard_path"] = (
+        (all_df["DRB_pct_pctile"] >= t["wing"]["dreb_pctile"])
+        & (all_df["tp"] >= t["wing"]["three_pct"])
+        & (all_df["three_share"] >= t["wing"]["three_rate"])
+        & (all_df["AST_TOV_pctile"] >= t["wing"]["ast_tov_pctile"])
+    )
+    all_df["qual_wing_standard"] = all_df["qual_wing_standard_path"] & all_df["qual_general"]
+    all_df["qual_wing_2_4"] = all_df["qual_wing_standard"]
+
+    all_df["qual_big_standard_path"] = (
+        (all_df["pos"] == t["big"]["position"])
+        & (all_df["heightIn"] >= t["big"]["height"])
+        & (all_df["DRB_pct_pctile"] >= t["big"]["dreb_pctile"])
+        & (all_df["tp"] >= t["big"]["three_pct"])
+        & (all_df["three_share"] >= t["big"]["three_rate"])
+        & (all_df["AST_TOV_pctile"] >= t["big"]["ast_tov_pctile"])
+    )
+    all_df["qual_big_standard"] = all_df["qual_big_standard_path"] & all_df["qual_general"]
+    all_df["qual_stretch_big"] = all_df["qual_big_standard"]
+
+    def passed_params(row, checks, qualified_col, path_label):
+        passed = [label for label, ok in checks if bool(ok)]
+        prefix = f"Qualified: {path_label}. " if bool(row[qualified_col]) else "Passed parameters: "
+        if not passed:
+            return prefix + "None yet."
+        return prefix + ", ".join(passed) + "."
+
+    all_df["qual_general_reason"] = all_df.apply(
+        lambda r: passed_params(
+            r,
+            [
+                ("AST% percentile", r["AST_pct_pctile"] >= t["general"]["ast_pctile"]),
+                ("eFG%", r["efg"] >= t["general"]["efg"]),
+                ("3P%", r["tp"] >= t["general"]["three_pct"]),
+                ("AST/TO percentile", r["AST_TOV_pctile"] >= t["general"]["ast_tov_pctile"]),
+                ("DREB requirement", dreb_raw_standard[r.name]),
+                ("Exception AST% percentile", r["AST_pct_pctile"] >= t["general"]["exception_ast_pctile"]),
+                ("Exception DREB percentile", r["DRB_pct_pctile"] >= t["general"]["exception_dreb_pctile"]),
+            ],
+            "qual_general",
+            "standard baseline path" if r["qual_general_standard"] else "creation plus rebounding exception path",
+        ),
+        axis=1,
+    )
+    all_df["qual_pg_reason"] = all_df.apply(
+        lambda r: passed_params(
+            r,
+            [
+                ("General Player baseline", r["qual_general"]),
+                ("AST% percentile", r["AST_pct_pctile"] >= t["pg"]["ast_pctile"]),
+                ("AST/TO percentile", r["AST_TOV_pctile"] >= t["pg"]["ast_tov_pctile"]),
+                ("3P%", r["tp"] >= t["pg"]["three_pct"]),
+                ("3P rate", r["three_share"] >= t["pg"]["three_rate"]),
+                ("2P% percentile exception", r["2P_pct_pctile"] >= t["pg"]["exception_two_pct_pctile"]),
+            ],
+            "qual_pg_combo",
+            "standard guard path" if r["qual_pg_standard"] else "2P efficiency exception path",
+        ),
+        axis=1,
+    )
+    all_df["qual_wing_reason"] = all_df.apply(
+        lambda r: passed_params(
+            r,
+            [
+                ("General Player baseline", r["qual_general"]),
+                ("DREB percentile", r["DRB_pct_pctile"] >= t["wing"]["dreb_pctile"]),
+                ("3P%", r["tp"] >= t["wing"]["three_pct"]),
+                ("3P rate", r["three_share"] >= t["wing"]["three_rate"]),
+                ("AST/TO percentile", r["AST_TOV_pctile"] >= t["wing"]["ast_tov_pctile"]),
+            ],
+            "qual_wing_2_4",
+            "2-4 wing path",
+        ),
+        axis=1,
+    )
+    all_df["qual_big_reason"] = all_df.apply(
+        lambda r: passed_params(
+            r,
+            [
+                ("General Player baseline", r["qual_general"]),
+                ("F/C classification", r["pos"] == t["big"]["position"]),
+                ("height", r["heightIn"] >= t["big"]["height"]),
+                ("DREB percentile", r["DRB_pct_pctile"] >= t["big"]["dreb_pctile"]),
+                ("3P%", r["tp"] >= t["big"]["three_pct"]),
+                ("3P rate", r["three_share"] >= t["big"]["three_rate"]),
+                ("AST/TO percentile", r["AST_TOV_pctile"] >= t["big"]["ast_tov_pctile"]),
+            ],
+            "qual_stretch_big",
+            "F/C stretch path",
+        ),
+        axis=1,
+    )
+
+    # Display scores stay available for every player so the map still uses the highest fit.
     all_df["score_pg_combo"] = (
-        0.35 * all_df["pct_assist_creation"]
-        + 0.20 * all_df["pct_three_pct"]
-        + 0.15 * all_df["pct_three_rate"]
-        + 0.20 * all_df["pct_ast_tov"]
-        + 0.10 * all_df["pct_efg"]
-        + np.where(all_df["meets_pg_preferred"], 8, 0)
+        0.30 * all_df["AST_pct_pctile"]
+        + 0.30 * all_df["AST_TOV_pctile"]
+        + 0.20 * all_df["three_profile"]
+        + 0.20 * all_df["2P_pct_pctile"]
     ).clip(0, 100)
     all_df["score_wing_2_4"] = (
-        0.30 * all_df["pct_dreb_pos_adj"]
-        + 0.25 * all_df["pct_three_pct"]
-        + 0.20 * all_df["pct_three_rate"]
-        + 0.15 * all_df["pct_ast_tov"]
-        + 0.10 * all_df["pct_size"]
-        + np.where(all_df["meets_wing_preferred"], 8, 0)
+        0.30 * all_df["DRB_pct_pctile"]
+        + 0.25 * all_df["eFG_pctile"]
+        + 0.25 * all_df["three_profile"]
+        + 0.20 * all_df["AST_TOV_pctile"]
     ).clip(0, 100)
     all_df["score_stretch_big"] = (
-        0.30 * all_df["pct_dreb_pos_adj"]
-        + 0.25 * all_df["pct_size"]
-        + 0.20 * all_df["pct_three_pct"]
-        + 0.15 * all_df["pct_three_rate"]
-        + 0.10 * all_df["pct_ast_tov"]
-        + np.where(all_df["meets_big_preferred"], 8, 0)
+        0.40 * all_df["DRB_pct_pctile"]
+        + 0.20 * all_df["three_profile"]
+        + 0.20 * all_df["eFG_pctile"]
+        + 0.20 * all_df["AST_TOV_pctile"]
     ).clip(0, 100)
 
+    for key, qual_col, score_col in [
+        ("pg", "qual_pg_combo", "score_pg_combo"),
+        ("wing", "qual_wing_2_4", "score_wing_2_4"),
+        ("big", "qual_stretch_big", "score_stretch_big"),
+    ]:
+        pool = all_df[qual_col]
+        all_df[f"{score_col}_qualified_pool"] = np.nan
+        if pool.any():
+            for feature in QUALIFICATION_CONFIG["weights"][key]:
+                raw_col = feature.replace(f"_{key}", "")
+                if raw_col in ("three_profile_pctile", "three_profile"):
+                    values = all_df.loc[pool, "three_profile"]
+                else:
+                    values = all_df.loc[pool, raw_col]
+                all_df.loc[pool, feature] = values.rank(pct=True, method="average") * 100
+            pool_score = sum(
+                weight * all_df.loc[pool, feature]
+                for feature, weight in QUALIFICATION_CONFIG["weights"][key].items()
+            )
+            all_df.loc[pool, f"{score_col}_qualified_pool"] = pool_score.clip(0, 100)
+
+    all_df["meets_pg_preferred"] = all_df["qual_pg_combo"]
+    all_df["meets_wing_preferred"] = all_df["qual_wing_2_4"]
+    all_df["meets_big_preferred"] = all_df["qual_stretch_big"]
+
     score_cols = list(ARCHETYPE_LABELS)
-    all_df["primary_score_col"] = all_df[score_cols].idxmax(axis=1)
+    primary_scores = all_df[score_cols].copy()
+    primary_scores.loc[all_df["heightIn"] < t["big"]["height"], "score_stretch_big"] = -np.inf
+    all_df["primary_score_col"] = primary_scores.idxmax(axis=1)
     all_df["primary_archetype"] = all_df["primary_score_col"].map(ARCHETYPE_LABELS)
-    all_df["primary_score"] = all_df[score_cols].max(axis=1)
+    all_df["primary_score"] = primary_scores.max(axis=1)
 
     X_raw = all_df[ARCHETYPE_PCA_FEATURES].fillna(
         all_df[ARCHETYPE_PCA_FEATURES].median()
@@ -140,8 +353,18 @@ def add_archetype_columns(dfs):
         all_df[f"arch_pca_PC{i+1}"] = coords[:, i]
 
     arch_cols = [
+        "AST_pct_pctile", "AST_TOV_pctile", "DRB_pct_pctile", "2P_pct_pctile",
+        "3P_pct_pctile", "3P_rate_pctile", "eFG_pctile", "three_profile",
         "pct_assist_creation", "pct_three_pct", "pct_three_rate",
         "pct_ast_tov", "pct_efg", "pct_dreb_pos_adj", "pct_size",
+        "qual_general", "qual_general_standard", "qual_general_exception",
+        "qual_pg_combo", "qual_pg_standard", "qual_pg_exception",
+        "qual_pg_standard_path", "qual_pg_exception_path",
+        "qual_wing_2_4", "qual_wing_standard", "qual_wing_standard_path",
+        "qual_stretch_big", "qual_big_standard", "qual_big_standard_path",
+        "qual_general_reason", "qual_pg_reason", "qual_wing_reason", "qual_big_reason",
+        "score_pg_combo_qualified_pool", "score_wing_2_4_qualified_pool",
+        "score_stretch_big_qualified_pool",
         "meets_pg_preferred", "meets_wing_preferred", "meets_big_preferred",
         "score_pg_combo", "score_wing_2_4", "score_stretch_big",
         "primary_score_col", "primary_archetype", "primary_score",
@@ -333,6 +556,16 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                 ),
             )
         )
+    qualification_notes = [
+        ("General", row["qual_general_reason"]),
+        ("PG", row["qual_pg_reason"]),
+        ("2-4 Wing", row["qual_wing_reason"]),
+        ("Big", row["qual_big_reason"]),
+    ]
+    qualification_note_ui = [
+        ui.div(ui.tags.b(f"{label}: "), str(note), class_="qual-note")
+        for label, note in qualification_notes
+    ]
 
     sim_rows = []
     for i, s in enumerate(sims):
@@ -382,6 +615,11 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                ui.div(
                    ui.div("Archetype Scores", class_="col-title"),
                    *archetype_scores,
+                   class_="arch-score-panel",
+               ),
+               ui.div(
+                   ui.div("Passed Qualification Parameters", class_="col-title"),
+                   *qualification_note_ui,
                    class_="arch-score-panel",
                )),
         ui.div({"class": "detail-col"},
@@ -667,7 +905,15 @@ def make_sidebar(prefix, df, conferences):
         ui.div(ui.div("Search by name", class_="sb-section-head"),
                ui.input_text(f"{prefix}_q", None, placeholder="e.g. Marcus Jackson"),
                class_="sb-section"),
-        ui.div(ui.div(ui.span("Archetype"),
+        ui.div(ui.div("Filter Mode", class_="sb-section-head"),
+               ui.input_select(
+                   f"{prefix}_qualification_filter",
+                   None,
+                   choices=QUALIFICATION_FILTERS,
+                   selected="none",
+               ),
+               class_="sb-section"),
+        ui.div(ui.div(ui.span("Most Similar Archetype"),
                       ui.tags.button("clear", class_="clear-btn",
                           onclick=f"Shiny.setInputValue('{prefix}_clear_arch',Math.random())"),
                       class_="sb-section-head"),
@@ -774,6 +1020,127 @@ def make_plot_area(prefix):
                ui.output_ui(f"{prefix}_legend_ui")),
         ui.div({"class": "scatter-wrap"},
                output_widget(f"{prefix}_scatter")),
+    )
+
+def apply_qualification_filter(df, mode):
+    mode = mode or "none"
+    qual_col = QUALIFICATION_FILTER_COLUMNS.get(mode)
+    if qual_col is None or qual_col not in df.columns:
+        return df
+    return df[df[qual_col]]
+
+def apply_archetype_score_filter(df, mode, min_score):
+    mode = mode or "none"
+    score_col = {
+        "pg": "score_pg_combo_qualified_pool",
+        "wing": "score_wing_2_4_qualified_pool",
+        "big": "score_stretch_big_qualified_pool",
+    }.get(mode, "primary_score")
+    if score_col not in df.columns:
+        score_col = "primary_score"
+    scores = pd.to_numeric(df[score_col], errors="coerce").fillna(-1)
+    return df[scores >= min_score]
+
+def qualification_diagnostic_items(df, mode):
+    mode = mode or "none"
+    total = len(df)
+    if mode == "none" or total == 0:
+        return []
+
+    def item(label, mask):
+        passed = int(mask.fillna(False).sum())
+        removed = total - passed
+        return {
+            "label": label,
+            "passed": passed,
+            "removed": removed,
+            "removed_pct": removed / total * 100,
+            "remaining_pct": passed / total * 100,
+        }
+
+    t = QUALIFICATION_CONFIG["thresholds"]
+    if mode == "general":
+        is_guard = df["pos"].isin(["G", "G/F"])
+        has_true_dreb_pct = df["dreb_source"].eq("DRB_pct")
+        dreb_ok = np.where(
+            has_true_dreb_pct,
+            np.where(
+                is_guard,
+                df["dreb_arch"] >= t["general"]["guard_dreb_raw"],
+                df["dreb_arch"] >= t["general"]["nonguard_dreb_raw"],
+            ),
+            df["DRB_pct_pctile"] >= t["general"]["ast_tov_pctile"],
+        )
+        return [
+            item("AST% pctile >= 70", df["AST_pct_pctile"] >= t["general"]["ast_pctile"]),
+            item("eFG% >= 50", df["efg"] >= t["general"]["efg"]),
+            item("3P% >= 30", df["tp"] >= t["general"]["three_pct"]),
+            item("AST/TO pctile >= 50", df["AST_TOV_pctile"] >= t["general"]["ast_tov_pctile"]),
+            item("DREB requirement", pd.Series(dreb_ok, index=df.index)),
+            item("General filter", df["qual_general"]),
+        ]
+    if mode == "pg":
+        return [
+            item("AST% pctile >= 70", df["AST_pct_pctile"] >= t["pg"]["ast_pctile"]),
+            item("AST/TO pctile >= 70", df["AST_TOV_pctile"] >= t["pg"]["ast_tov_pctile"]),
+            item("3P% >= 33", df["tp"] >= t["pg"]["three_pct"]),
+            item("3P rate >= 30", df["three_share"] >= t["pg"]["three_rate"]),
+            item("2P% pctile >= 70", df["2P_pct_pctile"] >= t["pg"]["exception_two_pct_pctile"]),
+            item("PG filter", df["qual_pg_combo"]),
+        ]
+    if mode == "wing":
+        return [
+            item("DREB pctile >= 70", df["DRB_pct_pctile"] >= t["wing"]["dreb_pctile"]),
+            item("3P% >= 33", df["tp"] >= t["wing"]["three_pct"]),
+            item("3P rate >= 30", df["three_share"] >= t["wing"]["three_rate"]),
+            item("AST/TO pctile >= 50", df["AST_TOV_pctile"] >= t["wing"]["ast_tov_pctile"]),
+            item("Wing filter", df["qual_wing_2_4"]),
+        ]
+    if mode == "big":
+        return [
+            item("Height >= 6'7\"", df["heightIn"] >= t["big"]["height"]),
+            item("DREB pctile >= 70", df["DRB_pct_pctile"] >= t["big"]["dreb_pctile"]),
+            item("3P% >= 30", df["tp"] >= t["big"]["three_pct"]),
+            item("3P rate >= 25", df["three_share"] >= t["big"]["three_rate"]),
+            item("AST/TO pctile >= 50", df["AST_TOV_pctile"] >= t["big"]["ast_tov_pctile"]),
+            item("Big filter", df["qual_stretch_big"]),
+        ]
+    return []
+
+def make_qualification_diagnostics(df, mode):
+    items = qualification_diagnostic_items(df, mode)
+    if not items:
+        return ui.div()
+    rows = [
+        ui.div(
+            f"{x['label']}: {x['passed']} pass, {x['removed']} removed "
+            f"({x['removed_pct']:.0f}% removed, {x['remaining_pct']:.0f}% remain)",
+            class_="qual-diag-row",
+        )
+        for x in items
+    ]
+    extras = []
+    if mode == "general":
+        extras = [
+            ui.div(
+                f"Standard path: {int(df['qual_general_standard'].sum())} · "
+                f"Exception path: {int(df['qual_general_exception'].sum())}",
+                class_="qual-diag-row",
+            )
+        ]
+    elif mode == "pg":
+        extras = [
+            ui.div(
+                f"Standard path: {int(df['qual_pg_standard'].sum())} · "
+                f"Exception path: {int(df['qual_pg_exception'].sum())}",
+                class_="qual-diag-row",
+            )
+        ]
+    return ui.div(
+        ui.div("Threshold diagnostics", class_="qual-diag-title"),
+        *rows,
+        *extras,
+        class_="qual-diag",
     )
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -1410,11 +1777,13 @@ def server(input, output, session):
     @reactive.calc
     def d1_filtered():
         d = d1_df.copy()
+        qual_mode = input.d1_qualification_filter()
+        d = apply_qualification_filter(d, qual_mode)
         q = (input.d1_q() or "").strip().lower()
         if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
         archs = list(input.d1_archetypes() or [])
         if archs: d = d[d["primary_archetype"].isin(archs)]
-        d = d[d["primary_score"] >= input.d1_score_min()]
+        d = apply_archetype_score_filter(d, qual_mode, input.d1_score_min())
         ps = list(input.d1_positions() or [])
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d1_classes() or [])
@@ -1535,11 +1904,13 @@ def server(input, output, session):
     @reactive.calc
     def d2_filtered():
         d = d2_df.copy()
+        qual_mode = input.d2_qualification_filter()
+        d = apply_qualification_filter(d, qual_mode)
         q = (input.d2_q() or "").strip().lower()
         if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
         archs = list(input.d2_archetypes() or [])
         if archs: d = d[d["primary_archetype"].isin(archs)]
-        d = d[d["primary_score"] >= input.d2_score_min()]
+        d = apply_archetype_score_filter(d, qual_mode, input.d2_score_min())
         ps = list(input.d2_positions() or [])
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d2_classes() or [])
@@ -1660,11 +2031,13 @@ def server(input, output, session):
     @reactive.calc
     def d3_filtered():
         d = d3_df.copy()
+        qual_mode = input.d3_qualification_filter()
+        d = apply_qualification_filter(d, qual_mode)
         q = (input.d3_q() or "").strip().lower()
         if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
         archs = list(input.d3_archetypes() or [])
         if archs: d = d[d["primary_archetype"].isin(archs)]
-        d = d[d["primary_score"] >= input.d3_score_min()]
+        d = apply_archetype_score_filter(d, qual_mode, input.d3_score_min())
         ps = list(input.d3_positions() or [])
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d3_classes() or [])
