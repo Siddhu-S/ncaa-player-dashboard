@@ -16,7 +16,12 @@ from data_engine import (
 HERE = Path(__file__).parent
 
 D2 = load_data(str(HERE / "d2_data_cleaned.csv"),            id_prefix="d2p")
-D1 = load_d1_data(str(HERE / "mbb_with_pca.csv"), id_prefix="d1p")
+D1 = load_d1_data(
+    str(HERE / "mbb_with_pca.csv"),
+    id_prefix="d1p",
+    transfer_path=str(HERE / "transfer_portal_cache.csv"),
+    recruiting_path=str(HERE / "recruiting_rankings_cache.csv"),
+)
 D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
 
 d2_df         = D2["df"];  d2_conferences = D2["conferences"]
@@ -62,6 +67,17 @@ QUALIFICATION_FILTER_COLUMNS = {
     "wing": "qual_wing_2_4",
     "big": "qual_stretch_big",
 }
+TRANSFER_TAG_FILTERS = {
+    "transfer_available": "Available transfer",
+}
+RECRUITING_TAG_FILTERS = {
+    "former_247_top_100": "Former 247 Composite Top 100",
+    "former_247_top_150": "Former 247 Composite Top 150",
+    "former_rivals_top_100": "Former Rivals Industry Top 100",
+    "former_rivals_ranked": "Former Rivals Industry Ranked",
+    "former_ranked_hs_prospect": "Any former ranked HS prospect",
+}
+TAG_FILTERS = {**TRANSFER_TAG_FILTERS, **RECRUITING_TAG_FILTERS}
 QUALIFICATION_CONFIG = {
     "thresholds": {
         "general": {
@@ -524,6 +540,12 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         stat_box("FG%", f"{row['fg']*100:.1f}", league_avg["fg"] * 100),
         stat_box("3P%", f"{row['tp']*100:.1f}", league_avg["tp"] * 100),
     ]
+    bpm_value = pd.to_numeric(pd.Series([row.get("bpm", np.nan)]), errors="coerce").iloc[0]
+    porpag_value = pd.to_numeric(pd.Series([row.get("porpag", np.nan)]), errors="coerce").iloc[0]
+    if pd.notna(bpm_value):
+        statline.append(stat_box("BPM", f"{bpm_value:.1f}", 0))
+    if pd.notna(porpag_value):
+        statline.append(stat_box("PORPAG", f"{porpag_value:.2f}", 0))
     bar_defs = [
         ("PPG", row["ppg"], league_avg["ppg"], ppg_max, None),
         ("RPG", row["rpg"], league_avg["rpg"], 14,      None),
@@ -566,6 +588,17 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         ui.div(ui.tags.b(f"{label}: "), str(note), class_="qual-note")
         for label, note in qualification_notes
     ]
+    player_tags = []
+    if bool(row.get("transfer_available", False)):
+        transfer_from = row.get("transfer_from") or row["team"]
+        player_tags.append(f"Available transfer from {transfer_from}")
+    recruiting_summary = str(row.get("recruiting_summary", "") or "").strip()
+    if recruiting_summary:
+        player_tags.extend(recruiting_summary.split("; "))
+    player_tag_ui = [
+        ui.span(tag, class_="pos-badge", style="color:var(--accent);border-color:var(--accent)")
+        for tag in player_tags
+    ]
 
     sim_rows = []
     for i, s in enumerate(sims):
@@ -605,13 +638,17 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                        star_icon)),
                ui.div(ui.span({"class": "team-dot", "style": f"background:{pc}"}),
                       f"{row['team']} · {row['confName']}", class_="player-team"),
+               ui.div(*player_tag_ui, class_="player-team", style="margin-top:8px;flex-wrap:wrap;")
+               if player_tag_ui else ui.div(),
                ui.div({"class": "bio-grid"},
                       bio_item("Division", division_label),
                       bio_item("Archetype", archetype_label(row["primary_archetype"])),
                       bio_item("Class",    row["cls"]),
                       bio_item("Height",   height_str(int(row["heightIn"])), mono=True),
                       bio_item("Games",    str(int(row["gp"])), mono=True),
-                      bio_item("Min/G",    f"{row['mpg']:.1f}", mono=True)),
+                      bio_item("Min/G",    f"{row['mpg']:.1f}", mono=True),
+                      bio_item("BPM",      f"{bpm_value:.1f}" if pd.notna(bpm_value) else "N/A", mono=True),
+                      bio_item("PORPAG",   f"{porpag_value:.2f}" if pd.notna(porpag_value) else "N/A", mono=True)),
                ui.div(
                    ui.div("Archetype Scores", class_="col-title"),
                    *archetype_scores,
@@ -896,8 +933,54 @@ def make_sidebar(prefix, df, conferences):
     bpg_min, bpg_max = slider_range("bpg", 0.1)
     spg_min, spg_max = slider_range("spg", 0.1)
     h_min, h_max = slider_range("heightIn", 1)
+    has_bpm = pd.to_numeric(df["bpm"], errors="coerce").notna().any() if "bpm" in df.columns else False
+    has_porpag = pd.to_numeric(df["porpag"], errors="coerce").notna().any() if "porpag" in df.columns else False
+    bpm_min, bpm_max = slider_range("bpm", 0.1) if has_bpm else (0, 0)
+    porpag_min, porpag_max = slider_range("porpag", 0.1) if has_porpag else (0, 0)
     conf_choices = {c["conf"]: c["confName"]
                     for c in sorted(conferences, key=lambda x: x["confName"])}
+    transfer_tag_choices = {
+        key: label
+        for key, label in TRANSFER_TAG_FILTERS.items()
+        if prefix == "d1" and key in df.columns
+    }
+    recruiting_tag_choices = {
+        "none": "None",
+        **{
+            key: label
+            for key, label in RECRUITING_TAG_FILTERS.items()
+            if prefix == "d1" and key in df.columns
+        },
+    }
+    transfer_tag_filter = (
+        ui.div({"class": "sb-section tag-filter-section"},
+               ui.div("Transfer Status", class_="sb-section-head"),
+               ui.input_checkbox_group(f"{prefix}_transfer_tags", None, choices=transfer_tag_choices),
+        )
+        if transfer_tag_choices else ui.div()
+    )
+    recruiting_tag_filter = (
+        ui.div({"class": "sb-section tag-filter-section"},
+               ui.div("Former Ranked Recruit", class_="sb-section-head"),
+               ui.input_select(f"{prefix}_recruiting_tag", None,
+                               choices=recruiting_tag_choices, selected="none"),
+        )
+        if len(recruiting_tag_choices) > 1 else ui.div()
+    )
+    bpm_filter = (
+        ui.div(ui.div("BPM", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_bpm", None, min=bpm_min, max=bpm_max,
+                               value=[bpm_min, bpm_max], step=0.1),
+               class_="sb-section")
+        if has_bpm else ui.div()
+    )
+    porpag_filter = (
+        ui.div(ui.div("PORPAG", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_porpag", None, min=porpag_min, max=porpag_max,
+                               value=[porpag_min, porpag_max], step=0.1),
+               class_="sb-section")
+        if has_porpag else ui.div()
+    )
 
     return ui.div(
         {"class": "sidebar"},
@@ -913,6 +996,8 @@ def make_sidebar(prefix, df, conferences):
                    selected="none",
                ),
                class_="sb-section"),
+        transfer_tag_filter,
+        recruiting_tag_filter,
         ui.div(ui.div(ui.span("Most Similar Archetype"),
                       ui.tags.button("clear", class_="clear-btn",
                           onclick=f"Shiny.setInputValue('{prefix}_clear_arch',Math.random())"),
@@ -980,6 +1065,8 @@ def make_sidebar(prefix, df, conferences):
                ui.input_slider(f"{prefix}_apg_range", None, min=apg_min, max=apg_max,
                                value=[apg_min, apg_max], step=0.1),
                class_="sb-section"),
+        bpm_filter,
+        porpag_filter,
         ui.div(ui.div("AST/TOV ratio", class_="sb-section-head"),
                ui.input_slider(f"{prefix}_ast_tov", None, min=ato_min, max=ato_max,
                                value=[ato_min, ato_max], step=0.1),
@@ -1040,6 +1127,19 @@ def apply_archetype_score_filter(df, mode, min_score):
         score_col = "primary_score"
     scores = pd.to_numeric(df[score_col], errors="coerce").fillna(-1)
     return df[scores >= min_score]
+
+def apply_tag_filters(df, tags):
+    valid_tags = [tag for tag in tags or [] if tag in df.columns]
+    if not valid_tags:
+        return df
+    for tag in valid_tags:
+        df = df[df[tag].fillna(False)]
+    return df
+
+def apply_single_tag_filter(df, tag):
+    if tag and tag != "none" and tag in df.columns:
+        return df[df[tag].fillna(False)]
+    return df
 
 def qualification_diagnostic_items(df, mode):
     mode = mode or "none"
@@ -1516,6 +1616,19 @@ app_ui = ui.page_fluid(
                 font-size:10px !important;
                 max-width:195px !important;
             }
+            .sidebar .tag-filter-section .checkbox label {
+                align-items:flex-start !important;
+                max-width:100% !important;
+                white-space:normal !important;
+                overflow:visible !important;
+                text-overflow:clip !important;
+                line-height:1.35 !important;
+                padding-top:5px !important;
+                padding-bottom:5px !important;
+            }
+            .sidebar .tag-filter-section .checkbox label::before {
+                margin-top:.35em;
+            }
 
             /* ── Division badge in modal ── */
             .div-badge {
@@ -1781,6 +1894,8 @@ def server(input, output, session):
         d = apply_qualification_filter(d, qual_mode)
         q = (input.d1_q() or "").strip().lower()
         if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
+        d = apply_tag_filters(d, list(input.d1_transfer_tags() or []))
+        d = apply_single_tag_filter(d, input.d1_recruiting_tag())
         archs = list(input.d1_archetypes() or [])
         if archs: d = d[d["primary_archetype"].isin(archs)]
         d = apply_archetype_score_filter(d, qual_mode, input.d1_score_min())
@@ -1800,6 +1915,8 @@ def server(input, output, session):
         lo, hi = input.d1_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
         lo, hi = input.d1_three_share(); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
         lo, hi = input.d1_apg_range();   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
+        lo, hi = input.d1_bpm();         d = d[(d["bpm"]         >= lo) & (d["bpm"]         <= hi)]
+        lo, hi = input.d1_porpag();      d = d[(d["porpag"]      >= lo) & (d["porpag"]      <= hi)]
         lo, hi = input.d1_spg_range();   d = d[(d["spg"]         >= lo) & (d["spg"]         <= hi)]
         lo, hi = input.d1_bpg_range();   d = d[(d["bpg"]         >= lo) & (d["bpg"]         <= hi)]
         lo, hi = input.d1_ast_tov();     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]

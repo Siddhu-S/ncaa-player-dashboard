@@ -8,6 +8,7 @@ D-II column set  → load_data()     (original schema)
 D-I  column set  → load_d1_data()  (barttorvik/kenpom schema, different names & scales)
 """
 
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import re
@@ -33,6 +34,42 @@ POSITIONS = ["G", "G/F", "F", "F/C", "C"]
 CLASSES   = ["R", "FR", "SO", "JR", "SR"]
 
 SIM_KEYS = ["PC1", "PC2", "PC3", "PC4"]
+
+TRANSFER_COLUMNS = [
+    "transfer_in_portal",
+    "transfer_available",
+    "transfer_status",
+    "transfer_from",
+    "transfer_to",
+    "transfer_year",
+    "transfer_exp",
+]
+
+RECRUITING_COLUMNS = [
+    "former_247_top_100",
+    "former_247_top_150",
+    "former_rivals_top_100",
+    "former_rivals_ranked",
+    "former_ranked_hs_prospect",
+    "recruiting_summary",
+]
+
+CLASS_TO_RECRUIT_YEAR = {
+    "FR": 2025,
+    "SO": 2024,
+    "JR": 2023,
+    "SR": 2022,
+    "R": 2025,
+}
+
+RECRUITING_ALIAS_GROUPS = [
+    ("Rob Dillingham", "Robert Dillingham"),
+    ("Solo Ball", "Solomon Ball"),
+    ("Nikolas Khamenia", "Nik Khamenia"),
+    ("Jacob Wilkins", "Jake Wilkins"),
+    ("Cameron Williams", "Cam Williams"),
+    ("Taylen Kinney", "Tay Kinney"),
+]
 
 # D-I role column → our 5-position system
 D1_CONF_NAMES = {
@@ -118,6 +155,191 @@ def conf_abbr(name: str) -> str:
     if len(words) == 1:
         return words[0][:5].upper()
     return "".join(w[0] for w in words)[:5].upper()
+
+
+def match_key(value: str) -> str:
+    value = "" if pd.isna(value) else str(value)
+    value = value.lower().strip()
+    value = re.sub(r"\b(jr|sr|ii|iii|iv|v)\b\.?", "", value)
+    return re.sub(r"[^a-z0-9]+", "", value)
+
+
+def recruiting_match_keys(value: str) -> list[str]:
+    base = match_key(value)
+    keys = [base] if base else []
+    for alias_group in RECRUITING_ALIAS_GROUPS:
+        group_keys = [match_key(name) for name in alias_group]
+        if base in group_keys:
+            keys.extend(key for key in group_keys if key and key not in keys)
+    return keys
+
+
+def _empty_transfer_frame(index) -> pd.DataFrame:
+    out = pd.DataFrame(index=index)
+    out["transfer_in_portal"] = False
+    out["transfer_available"] = False
+    out["transfer_status"] = "Not in portal"
+    out["transfer_from"] = ""
+    out["transfer_to"] = ""
+    out["transfer_year"] = np.nan
+    out["transfer_exp"] = ""
+    return out
+
+
+def _load_transfer_tags(transfer_path: str | None, raw: pd.DataFrame) -> pd.DataFrame:
+    tags = _empty_transfer_frame(raw.index)
+    if not transfer_path:
+        return tags
+    path = Path(transfer_path)
+    if not path.exists():
+        return tags
+
+    portal = pd.read_csv(path)
+    if portal.empty or "player" not in portal.columns:
+        return tags
+
+    portal = portal.copy()
+    for col in ["from", "to", "exp", "status"]:
+        if col not in portal.columns:
+            portal[col] = ""
+    if "available" not in portal.columns:
+        to_text = portal["to"].fillna("").astype(str).str.strip().str.lower()
+        portal["available"] = to_text.isin(["", "na", "nan", "none", "uncommitted", "undecided", "tbd"])
+
+    portal["_player_key"] = portal["player"].apply(match_key)
+    portal["_from_key"] = portal["from"].apply(match_key)
+    raw_keys = pd.DataFrame({
+        "_idx": raw.index,
+        "_player_key": raw["player_name"].apply(match_key),
+        "_team_key": raw["team"].apply(match_key),
+    })
+
+    portal["year"] = pd.to_numeric(portal.get("year", np.nan), errors="coerce")
+    portal = portal.sort_values(["available", "year"], ascending=[False, False])
+    from_match = raw_keys.merge(
+        portal,
+        how="left",
+        left_on=["_player_key", "_team_key"],
+        right_on=["_player_key", "_from_key"],
+        suffixes=("", "_portal"),
+    ).drop_duplicates("_idx")
+    portal["_to_key"] = portal["to"].apply(match_key)
+    to_match = raw_keys.merge(
+        portal,
+        how="left",
+        left_on=["_player_key", "_team_key"],
+        right_on=["_player_key", "_to_key"],
+        suffixes=("", "_portal"),
+    ).drop_duplicates("_idx")
+
+    from_match = from_match.set_index("_idx")
+    to_match = to_match.set_index("_idx")
+    for idx in raw.index:
+        row = from_match.loc[idx] if idx in from_match.index else None
+        if row is None or pd.isna(row.get("player")):
+            row = to_match.loc[idx] if idx in to_match.index else None
+        if row is None or pd.isna(row.get("player")):
+            continue
+        available = bool(row.get("available", False))
+        to_team = "" if pd.isna(row.get("to")) else str(row.get("to")).strip()
+        tags.at[idx, "transfer_in_portal"] = True
+        tags.at[idx, "transfer_available"] = available
+        tags.at[idx, "transfer_status"] = "Available transfer" if available else "Portal committed"
+        tags.at[idx, "transfer_from"] = "" if pd.isna(row.get("from")) else str(row.get("from")).strip()
+        tags.at[idx, "transfer_to"] = to_team
+        tags.at[idx, "transfer_year"] = row.get("year")
+        tags.at[idx, "transfer_exp"] = "" if pd.isna(row.get("exp")) else str(row.get("exp")).strip()
+    return tags
+
+
+def _empty_recruiting_frame(index) -> pd.DataFrame:
+    out = pd.DataFrame(index=index)
+    out["former_247_top_100"] = False
+    out["former_247_top_150"] = False
+    out["former_rivals_top_100"] = False
+    out["former_rivals_ranked"] = False
+    out["former_ranked_hs_prospect"] = False
+    out["recruiting_summary"] = ""
+    return out
+
+
+def _candidate_recruit_years(cls: str) -> set[int]:
+    base = CLASS_TO_RECRUIT_YEAR.get(cls)
+    if base is None:
+        return set()
+    return {base - 1, base, base + 1}
+
+
+def _load_recruiting_tags(recruiting_path: str | None, raw: pd.DataFrame) -> pd.DataFrame:
+    tags = _empty_recruiting_frame(raw.index)
+    if not recruiting_path:
+        return tags
+    path = Path(recruiting_path)
+    if not path.exists():
+        return tags
+
+    rankings = pd.read_csv(path)
+    if rankings.empty or "player" not in rankings.columns:
+        return tags
+
+    rankings = rankings.copy()
+    rankings["source"] = rankings.get("source", "").astype(str).str.lower().str.strip()
+    rankings["rank"] = pd.to_numeric(rankings.get("rank", np.nan), errors="coerce")
+    rankings["class_year"] = pd.to_numeric(rankings.get("class_year", np.nan), errors="coerce").astype("Int64")
+    rankings["_player_key"] = rankings["player"].apply(match_key)
+    rankings = rankings[rankings["_player_key"].str.len() > 0]
+
+    raw_keys = pd.DataFrame({
+        "_idx": raw.index,
+        "_player_key": raw["player_name"].apply(match_key),
+        "_class": raw["yr"].apply(normalize_class),
+    })
+    grouped = {k: g.copy() for k, g in rankings.groupby("_player_key")}
+
+    for _, row in raw_keys.iterrows():
+        match_frames = [
+            grouped[key]
+            for key in recruiting_match_keys(row["_player_key"])
+            if key in grouped
+        ]
+        if not match_frames:
+            continue
+        matches = pd.concat(match_frames, ignore_index=True).drop_duplicates(
+            ["source", "class_year", "rank", "player"]
+        )
+
+        years = _candidate_recruit_years(row["_class"])
+        if years:
+            year_matches = matches[matches["class_year"].isin(years)]
+            if year_matches.empty:
+                continue
+            matches = year_matches
+
+        labels = []
+        top_247 = matches[matches["source"].eq("247") & matches["rank"].notna()]
+        rivals_sources = ["rivals_industry", "on3_rivals"]
+        top_rivals = matches[matches["source"].isin(rivals_sources) & matches["rank"].notna()]
+
+        if not top_247.empty:
+            best = top_247.sort_values("rank").iloc[0]
+            rank = int(best["rank"])
+            class_year = "" if pd.isna(best["class_year"]) else int(best["class_year"])
+            tags.at[row["_idx"], "former_247_top_100"] = rank <= 100
+            tags.at[row["_idx"], "former_247_top_150"] = rank <= 150
+            labels.append(f"247 Composite No. {rank}" + (f" ({class_year})" if class_year else ""))
+
+        if not top_rivals.empty:
+            best = top_rivals.sort_values("rank").iloc[0]
+            rank = int(best["rank"])
+            class_year = "" if pd.isna(best["class_year"]) else int(best["class_year"])
+            tags.at[row["_idx"], "former_rivals_top_100"] = rank <= 100
+            tags.at[row["_idx"], "former_rivals_ranked"] = True
+            labels.append(f"Rivals Industry No. {rank}" + (f" ({class_year})" if class_year else ""))
+
+        tags.at[row["_idx"], "former_ranked_hs_prospect"] = bool(labels)
+        tags.at[row["_idx"], "recruiting_summary"] = "; ".join(labels)
+
+    return tags
 
 
 def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
@@ -263,6 +485,12 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
     df["PC2"]          = n("PC2")
     df["PC3"]          = n("PC3")
     df["PC4"]          = n("PC4")
+    df["bpm"]          = np.nan
+    df["porpag"]       = np.nan
+    for col, values in _empty_transfer_frame(df.index).items():
+        df[col] = values
+    for col, values in _empty_recruiting_frame(df.index).items():
+        df[col] = values
 
     return _build_output(df, id_prefix)
 
@@ -282,7 +510,12 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
 #   - PCs are arch_PC1/2/3 + val_PC1 (four components, different names)
 #   - No FG% column; use eFG/100 as proxy (best available overall shooting %)
 
-def load_d1_data(csv_path: str, id_prefix: str = "d1p") -> dict:
+def load_d1_data(
+    csv_path: str,
+    id_prefix: str = "d1p",
+    transfer_path: str | None = None,
+    recruiting_path: str | None = None,
+) -> dict:
     """
     Load D-I dataset (mbb_with_pca.csv).
     Remaps column names and rescales percentages to match the shared schema
@@ -353,5 +586,12 @@ def load_d1_data(csv_path: str, id_prefix: str = "d1p") -> dict:
     df["PC2"] = n("arch_PC2")
     df["PC3"] = n("arch_PC3")
     df["PC4"] = n("val_PC1")
+
+    df["bpm"] = n("bpm")
+    df["porpag"] = n("PORPAG")
+    for col, values in _load_transfer_tags(transfer_path, raw).items():
+        df[col] = values
+    for col, values in _load_recruiting_tags(recruiting_path, raw).items():
+        df[col] = values
 
     return _build_output(df, id_prefix)

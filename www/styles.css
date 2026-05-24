@@ -315,6 +315,19 @@ html, body {
 #sidebar .checkbox-group-input .checkbox input:checked ~ span {
   background: var(--ink); color: var(--bg); border-color: var(--ink);
 }
+.tag-filter-section .checkbox label {
+  align-items: flex-start !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  line-height: 1.35 !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+.tag-filter-section .checkbox label::before {
+  margin-top: .35em;
+}
 /* sliders */
 #sidebar .irs--shiny .irs-bar    { background: var(--accent) !important; border-top: none; border-bottom: none; }
 #sidebar .irs--shiny .irs-handle { background: var(--bg) !important; border: 2px solid var(--accent) !important; border-radius: 50% !important; }
