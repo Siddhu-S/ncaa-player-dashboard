@@ -385,11 +385,17 @@ html, body {
 
 
 /* ── Modal overrides ────────────────────────────────────────────── */
-.modal-dialog { max-width: 1000px !important; }
+.modal-dialog {
+  max-width: 1000px !important;
+  max-height: calc(100vh - 48px) !important;
+}
 .modal-content {
   border: 2px solid var(--ink) !important;
   border-radius: 0 !important;
   background: var(--bg) !important;
+  max-height: calc(100vh - 48px) !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 .modal-header {
   background: var(--accent) !important;
@@ -407,7 +413,12 @@ html, body {
   filter: none; opacity: .6;
 }
 .modal-header .btn-close:hover { opacity: 1; }
-.modal-body { padding: 0 !important; }
+.modal-body {
+  padding: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  flex: 1 1 auto !important;
+}
 .modal-footer { display: none !important; }
 
 /* ── Detail body (inside modal) ─────────────────────────────────── */
@@ -415,13 +426,16 @@ html, body {
   display: grid;
   grid-template-columns: 220px 1.2fr 1fr;
   min-height: 400px;
-  max-height: 78vh;
+  height: min(78vh, calc(100vh - 112px));
+  max-height: calc(100vh - 112px);
   overflow: hidden;
 }
 
 .detail-col {
   padding: 18px 18px 14px;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .detail-col + .detail-col { border-left: 1px solid var(--rule); }
 
