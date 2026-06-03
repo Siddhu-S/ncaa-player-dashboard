@@ -1742,6 +1742,8 @@ app_ui = ui.page_fluid(
                           ),
                           ui.output_ui("watchlist_ui"))),
         ),
+
+        ui.div({"id": "site-footer"}, "Developed at UC San Diego · © 2026"),
     ),
 
     ui.output_ui("d1_modal_trigger"),

@@ -38,9 +38,22 @@ html, body {
 /* ── App shell ──────────────────────────────────────────────────── */
 #atlas-shell {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr auto;
   height: 100vh;
   overflow: hidden;
+}
+
+/* ── Site footer (attribution) ──────────────────────────────────── */
+#site-footer {
+  border-top: 1px solid var(--rule);
+  padding: 10px 28px;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  text-align: center;
+  flex-shrink: 0;
 }
 
 /* ── Masthead ───────────────────────────────────────────────────── */
