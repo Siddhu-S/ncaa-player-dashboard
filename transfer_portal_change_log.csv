@@ -115,3 +115,4 @@ detected_at,change_type,player,from,previous_to,current_to,year,previous_status,
 2026-06-18T14:26:02+00:00,no_longer_available,Lance Piper,Delaware,,Northern Arizona,2026,Available transfer,Portal committed
 2026-06-18T14:26:02+00:00,no_longer_available,Ralph Martino Jr.,Saint Francis,,Florida A&M,2026,Available transfer,Portal committed
 2026-06-18T14:26:02+00:00,newly_available,Bradyn Elder,Kennesaw St.,,,2026,,Available transfer
+2026-06-19T14:23:59+00:00,removed_from_portal_cache,Yohan Gutiérrez,Stephen F. Austin,,,2026,Available transfer,Missing from latest cache
