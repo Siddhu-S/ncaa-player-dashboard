@@ -126,3 +126,4 @@ detected_at,change_type,player,from,previous_to,current_to,year,previous_status,
 2026-06-25T13:26:53+00:00,no_longer_available,Walker Timme,Northern Arizona,,Alaska Anchorage,2026,Available transfer,Portal committed
 2026-06-25T13:26:53+00:00,removed_from_portal_cache,Yohan Gutiérrez,Stephen F. Austin,,,2026,Available transfer,Missing from latest cache
 2026-06-25T13:26:53+00:00,newly_available,Bradyn Elder,Kennesaw St.,,,2026,,Available transfer
+2026-06-26T13:20:54+00:00,no_longer_available,Will Kuykendall,Baylor,,Alaska Anchorage,2026,Available transfer,Portal committed
