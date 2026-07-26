@@ -31,7 +31,7 @@ POS_LABEL = {
 }
 
 POSITIONS = ["G", "G/F", "F", "F/C", "C"]
-CLASSES   = ["R", "FR", "SO", "JR", "SR"]
+CLASSES   = ["R", "FR", "SO", "JR", "SR", "GR"]
 
 SIM_KEYS = ["PC1", "PC2", "PC3", "PC4"]
 
@@ -59,6 +59,7 @@ CLASS_TO_RECRUIT_YEAR = {
     "SO": 2024,
     "JR": 2023,
     "SR": 2022,
+    "GR": 2021,
     "R": 2025,
 }
 
@@ -121,13 +122,37 @@ def flip_name(s: str) -> str:
 
 
 def normalize_class(s: str) -> str:
-    v = (s or "").lower().replace(".", "").strip()
+    if pd.isna(s):
+        return "SR"
+    v = str(s).lower().replace(".", "").strip()
+    if v.startswith("gr") or "graduate" in v:
+        return "GR"
     if v.startswith("fr"): return "FR"
     if v.startswith("so"): return "SO"
     if v.startswith("jr"): return "JR"
     if v.startswith("sr"): return "SR"
     if v.startswith("r"):  return "R"
     return "SR"
+
+
+def eligibility_used(s: str) -> int:
+    if pd.isna(s):
+        return 4
+    v = re.sub(r"[^a-z0-9]+", " ", str(s).lower()).strip()
+    compact = v.replace(" ", "")
+    if "graduate" in v or compact.startswith("gr"):
+        return 5
+    if "freshman" in v or compact.startswith(("fr", "rsfr", "rfr", "rf")):
+        return 1
+    if "sophomore" in v or compact.startswith(("so", "rsso", "rso")):
+        return 2
+    if "junior" in v or compact.startswith(("jr", "rsjr", "rjr")):
+        return 3
+    if "senior" in v or compact.startswith(("sr", "rssr", "rsr")):
+        return 4
+    if compact == "r":
+        return 1
+    return 4
 
 
 def refine_position(raw: str) -> str:
@@ -149,6 +174,9 @@ def height_str(inches: int) -> str:
 
 
 def conf_abbr(name: str) -> str:
+    if pd.isna(name):
+        return "—"
+    name = str(name).strip()
     if not name:
         return "—"
     words = re.sub(r"[^A-Za-z ]", "", name).split()
@@ -162,6 +190,11 @@ def match_key(value: str) -> str:
     value = value.lower().strip()
     value = re.sub(r"\b(jr|sr|ii|iii|iv|v)\b\.?", "", value)
     return re.sub(r"[^a-z0-9]+", "", value)
+
+
+def normalize_pct_series(series: pd.Series) -> pd.Series:
+    vals = pd.to_numeric(series, errors="coerce").fillna(0)
+    return vals.where(vals <= 1, vals / 100.0)
 
 
 def recruiting_match_keys(value: str) -> list[str]:
@@ -353,23 +386,13 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
 
     # ── Similarity setup ─────────────────────────────────────────
 
-
-    PC_mat = df[SIM_KEYS].values.astype(float)
-    cov    = np.cov(PC_mat, rowvar=False)
-    # Regularise: add small diagonal to avoid singular matrix
-    # (can happen with tiny datasets or near-constant PCs)
-    cov   += np.eye(len(SIM_KEYS)) * 1e-6
-    VI     = np.linalg.inv(cov)          # inverse covariance matrix
-    
-    
-    # z-score PCs for similarity
-    for k in SIM_KEYS:
-        mu = df[k].mean()
-        sd = df[k].std() or 1
-        df[f"_z_{k}"] = (df[k] - mu) / sd
-
-    Z_cols = [f"_z_{k}" for k in SIM_KEYS]
-    Z      = df[Z_cols].values
+    def similarity_cols() -> list[str]:
+        shared_cols = [f"arch_pca_PC{i}" for i in range(1, 5)]
+        if all(col in df.columns for col in shared_cols):
+            shared_values = df[shared_cols].apply(pd.to_numeric, errors="coerce")
+            if shared_values.notna().any().all():
+                return shared_cols
+        return SIM_KEYS
 
     # league averages
     avg_cols = ["ppg","rpg","apg","spg","bpg","tov","fg","tp","ft","ts","usg","mpg"]
@@ -390,21 +413,32 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
 
     # similarity closure
     def similar_to(player_id: str, n_sim: int = 5, metric: str = "mahalanobis"):
+        pc_cols = similarity_cols()
+        pc_frame = df[pc_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        pc_mat = pc_frame.to_numpy(dtype=float)
+        cov = np.cov(pc_mat, rowvar=False)
+        cov += np.eye(len(pc_cols)) * 1e-6
+        vi = np.linalg.inv(cov)
         idx = df.index[df["id"] == player_id]
         if len(idx) == 0:
             return []
         i    = idx[0]
-        vec  = PC_mat[i].reshape(1, -1)          # (1, 4)
+        vec  = pc_mat[i].reshape(1, -1)
 
         if metric == "euclidean":
-            dists = cdist(vec, PC_mat, metric="euclidean").flatten()
+            dists = cdist(vec, pc_mat, metric="euclidean").flatten()
         else:
-            dists = cdist(vec, PC_mat, metric="mahalanobis", VI=VI).flatten()
+            dists = cdist(vec, pc_mat, metric="mahalanobis", VI=vi).flatten()
         dists[i] = np.inf
 
         sorted_idx = np.argsort(dists)
-        ref_idx    = min(len(dists) - 1, max(20, n_sim * 4))
-        ref_dist   = dists[sorted_idx[ref_idx]] or 1.0
+        finite_dists = dists[np.isfinite(dists)]
+        ref_idx = min(len(dists) - 1, max(20, n_sim * 4))
+        ref_dist = dists[sorted_idx[ref_idx]] if len(sorted_idx) else 1.0
+        if not np.isfinite(ref_dist) or ref_dist <= 0:
+            ref_dist = np.nanmax(finite_dists) if finite_dists.size else 1.0
+        if not np.isfinite(ref_dist) or ref_dist <= 0:
+            ref_dist = 1.0
 
         results = []
         for j in sorted_idx[:n_sim]:
@@ -437,7 +471,7 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
 # D-II LOADER  (original schema)
 # ─────────────────────────────────────────────────────────────────────────
 
-def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
+def load_data(csv_path: str, id_prefix: str = "d2p", min_mpg: float | None = None) -> dict:
     """
     Load D-II dataset (data.csv).
     Column names match the original D-II schema produced by the cleaning pipeline.
@@ -448,12 +482,16 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
     def n(col):
         return pd.to_numeric(raw.get(col, 0), errors="coerce").fillna(0)
 
+    def p(col):
+        return normalize_pct_series(raw.get(col, 0))
+
     df = pd.DataFrame()
     df["name"]         = raw["Player Name"].apply(flip_name)
     df["pos"]          = raw["Position"].apply(refine_position)
     df["cls"]          = raw["Year"].apply(normalize_class)
-    df["team"]         = raw["Team"].str.strip()
-    df["confName"]     = raw["Conference"].str.strip()
+    df["eligibility"]  = raw["Year"].apply(eligibility_used).astype(int)
+    df["team"]         = raw["Team"].fillna("").astype(str).str.strip()
+    df["confName"]     = raw["Conference"].fillna("").astype(str).str.strip()
     df["conf"]         = df["confName"].apply(conf_abbr)
     df["heightIn"]     = pd.to_numeric(raw["Height"], errors="coerce").fillna(72).round().astype(int)
     df["gp"]           = n("GP").round().astype(int)
@@ -466,15 +504,22 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
     df["tov"]          = n("TOPG")
     df["orb"]          = n("ORBPG")
     df["drb"]          = n("DRBPG")
-    df["fg"]           = n("FG%")          # 0-1
+    df["pts_per_40"]   = n("pts_per_40")
+    df["reb_per_40"]   = n("reb_per_40")
+    df["ast_per_40"]   = n("ast_per_40")
+    df["stl_per_40"]   = n("stl_per_40")
+    df["blk_per_40"]   = n("blk_per_40")
+    df["tov_per_40"]   = n("tov_per_40")
+    df["fg"]           = p("FG%")
     two_made           = n("FGM") - n("3PTM")
     two_att            = n("FGA") - n("3PTA")
     df["two_pct"]      = (two_made / two_att.replace(0, np.nan)).fillna(0).clip(0, 1)
-    df["tp"]           = n("3PT%")         # 0-1
-    df["ft"]           = n("FT%")          # 0-1
-    df["ts"]           = n("TS_pct")       # 0-1
+    df["tp"]           = p("3PT%")
+    df["ft"]           = p("FT%")
+    df["ts"]           = p("TS_pct")
+    df["ftr"]          = n("FTR")
     df["usg"]          = n("usg")          # 0-1 or percentage — keep as-is
-    df["efg"]          = n("eFG")
+    df["efg"]          = p("eFG")
     df["three_share"]  = n("three_share")
     df["ast_tov"]      = n("AST_TOV")
     df["assist_creation"] = n("ast_per_40")
@@ -491,6 +536,8 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
         df[col] = values
     for col, values in _empty_recruiting_frame(df.index).items():
         df[col] = values
+    if min_mpg is not None:
+        df = df[df["mpg"].fillna(0) >= float(min_mpg)].copy()
 
     return _build_output(df, id_prefix)
 
@@ -539,6 +586,7 @@ def load_d1_data(
 
     # Class
     df["cls"] = raw["yr"].apply(normalize_class)
+    df["eligibility"] = raw["yr"].apply(eligibility_used).astype(int)
 
     # Height — already in inches
     df["heightIn"] = pd.to_numeric(raw["height_inches"], errors="coerce").fillna(78).round().astype(int)
@@ -553,11 +601,18 @@ def load_d1_data(
     df["bpg"] = n("blk_per_game")
     df["orb"] = n("oreb_per_game")
     df["drb"] = n("dreb_per_game")
+    pace_to_40 = 40.0 / df["mpg"].replace(0, np.nan)
+    df["pts_per_40"] = (df["ppg"] * pace_to_40).fillna(0)
+    df["reb_per_40"] = (df["rpg"] * pace_to_40).fillna(0)
+    df["ast_per_40"] = (df["apg"] * pace_to_40).fillna(0)
+    df["stl_per_40"] = (df["spg"] * pace_to_40).fillna(0)
+    df["blk_per_40"] = (df["bpg"] * pace_to_40).fillna(0)
 
     # Assist-to-turnover (raw tov col is TOV_per_24; use AST_TOV ratio directly)
     df["ast_tov"] = n("AST_TOV")
     # Reconstruct tov per-game from AST_TOV ratio and apg (apg / ast_tov, guarded)
     df["tov"] = (df["apg"] / df["ast_tov"].replace(0, np.nan)).fillna(0)
+    df["tov_per_40"] = (df["tov"] * pace_to_40).fillna(0)
 
     # Shooting percentages — D-I has mixed scales:
     #   eFG, TS_pct  → 0-100  →  /100
@@ -567,6 +622,7 @@ def load_d1_data(
     df["tp"]  = n("3P_pct")             # already 0-1
     df["ft"]  = n("FT_pct")             # already 0-1
     df["ts"]  = n("TS_pct") / 100.0     # scaled 0-100 → 0-1
+    df["ftr"] = n("FTR")
     df["efg"] = n("eFG") / 100.0        # 0-1 for slider
 
     # Usage — 0-100 in D-I → /100 for consiwaistency with D-II (both end up ~0.19 mean)
