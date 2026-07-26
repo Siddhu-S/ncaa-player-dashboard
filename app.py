@@ -793,8 +793,9 @@ def build_trace_id_map(plot_df, selected_id, dimmed_arch):
         if not rest.empty:
             trace_ids.append(rest["id"].astype(str).tolist())
         if not sel.empty:
-            trace_ids.append([])
-            trace_ids.append(sel["id"].astype(str).tolist())
+            selected_ids = sel["id"].astype(str).tolist()
+            trace_ids.append(selected_ids)
+            trace_ids.append(selected_ids)
     return trace_ids
 
 
@@ -818,12 +819,12 @@ def build_layout(_plot_df):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#0f1623",
         margin=dict(l=64, r=18, t=16, b=60),
         xaxis=dict(
-            title="PC1 · creation / spacing ↔ rebounding / interior size",
+            title="PC1 · spacing ↔ rebounding",
             title_font=tf,
             **axis,
         ),
         yaxis=dict(
-            title="PC2 · creators ↔ tall defenders",
+            title="PC2 · lead guards ↔ rim protectors",
             title_font=tf,
             **axis,
         ),
