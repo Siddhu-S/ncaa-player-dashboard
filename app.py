@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import html
+import json
 import re
 
 from data_engine import (
@@ -33,7 +34,6 @@ def resolve_current_d2_schema_path():
         if candidate.exists():
             return candidate
     return LEGACY_D2_PATH
-
 
 D2 = load_data(
     str(resolve_current_d2_schema_path()),
@@ -102,6 +102,13 @@ RECRUITING_TAG_FILTERS = {
     "former_ranked_hs_prospect": "Any former ranked HS prospect",
 }
 TAG_FILTERS = {**TRANSFER_TAG_FILTERS, **RECRUITING_TAG_FILTERS}
+ELIGIBILITY_OPTIONS = {
+    1: "1 year used",
+    2: "2 years used",
+    3: "3 years used",
+    4: "4 years used",
+    5: "5 years used",
+}
 QUALIFICATION_CONFIG = {
     "thresholds": {
         "general": {
@@ -158,13 +165,18 @@ QUALIFICATION_CONFIG = {
     },
 }
 ARCHETYPE_PCA_FEATURES = [
-    "pct_assist_creation",
-    "pct_three_pct",
-    "pct_three_rate",
-    "pct_ast_tov",
-    "pct_efg",
-    "pct_dreb_pos_adj",
-    "pct_size",
+    "pts_per_40",
+    "ts",
+    "three_share",
+    "ftr",
+    "ast_per_40",
+    "ast_tov",
+    "tov_per_40",
+    "orb",
+    "drb",
+    "stl_per_40",
+    "blk_per_40",
+    "heightIn",
 ]
 
 
@@ -389,6 +401,19 @@ def add_archetype_columns(dfs):
     X = (X_raw - X_raw.mean(axis=0)) / X_std
     _u, _s, vt = np.linalg.svd(X, full_matrices=False)
     coords = X @ vt[:4].T
+    # Orient axes for readability: PC1 trends interior/rebounding-positive,
+    # and PC2 trends creator-negative / taller-defender-positive.
+    if vt[0, ARCHETYPE_PCA_FEATURES.index("heightIn")] < 0:
+        coords[:, 0] *= -1
+    pc2_creator_polarity = (
+        vt[1, ARCHETYPE_PCA_FEATURES.index("ast_per_40")]
+        + vt[1, ARCHETYPE_PCA_FEATURES.index("ast_tov")]
+        + 0.5 * vt[1, ARCHETYPE_PCA_FEATURES.index("pts_per_40")]
+        - vt[1, ARCHETYPE_PCA_FEATURES.index("heightIn")]
+        - vt[1, ARCHETYPE_PCA_FEATURES.index("blk_per_40")]
+    )
+    if pc2_creator_polarity > 0:
+        coords[:, 1] *= -1
     for i in range(4):
         all_df[f"arch_pca_PC{i+1}"] = coords[:, i]
 
@@ -668,6 +693,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                       bio_item("Division", division_label),
                       bio_item("Archetype", archetype_label(row["primary_archetype"])),
                       bio_item("Class",    row["cls"]),
+                      bio_item("Eligibility Used", str(int(row["eligibility"])), mono=True),
                       bio_item("Height",   height_str(int(row["heightIn"])), mono=True),
                       bio_item("Games",    str(int(row["gp"])), mono=True),
                       bio_item("Min/G",    f"{row['mpg']:.1f}", mono=True),
@@ -735,7 +761,8 @@ def cdata(d):
     return list(zip(d["name"], d["primary_archetype"].map(archetype_label), d["team"], d["cls"],
                     d["ppg"],  d["rpg"], d["apg"],  d["id"]))
 
-def build_traces(plot_df, selected_id, dimmed_arch, dot_size=9.5, dot_opacity=0.78):
+def build_traces(plot_df, selected_id, dimmed_arch, dot_size=9.5, dot_opacity=0.78,
+                 compress_pc1_tail=False, compress_pc2_tail=False):
     traces = []
     for arch in ARCHETYPE_ORDER:
         sub  = plot_df[plot_df["primary_archetype"] == arch]
@@ -743,39 +770,171 @@ def build_traces(plot_df, selected_id, dimmed_arch, dot_size=9.5, dot_opacity=0.
         alpha = 0.06 if arch in dimmed_arch else dot_opacity
         rest  = sub[sub["id"] != selected_id] if selected_id else sub
         sel   = sub[sub["id"] == selected_id] if selected_id else sub.iloc[0:0]
+        rest_x = compress_positive_tail(rest["arch_pca_PC1"]) if compress_pc1_tail else rest["arch_pca_PC1"]
+        rest_y = compress_negative_tail(rest["arch_pca_PC2"]) if compress_pc2_tail else rest["arch_pca_PC2"]
         if not rest.empty:
             traces.append(go.Scatter(
-                x=rest["arch_pca_PC1"], y=rest["arch_pca_PC2"], mode="markers",
+                x=rest_x, y=rest_y, mode="markers",
                 marker=dict(size=dot_size, color=ARCHETYPE_COLOR[arch],
                             opacity=alpha, line=dict(width=0)),
                 customdata=cdata(rest), hovertemplate=HOVER_TPL,
                 name=archetype_label(arch), showlegend=False))
         if not sel.empty:
             r = sel.iloc[0]
+            sel_x = float(compress_positive_tail([r["arch_pca_PC1"]])[0]) if compress_pc1_tail else r["arch_pca_PC1"]
+            sel_y = float(compress_negative_tail([r["arch_pca_PC2"]])[0]) if compress_pc2_tail else r["arch_pca_PC2"]
             traces.append(go.Scatter(
-                x=[r["arch_pca_PC1"]], y=[r["arch_pca_PC2"]], mode="markers",
+                x=[sel_x], y=[sel_y], mode="markers",
                 marker=dict(size=dot_size+16, color="rgba(0,0,0,0)",
                             line=dict(color="#c8a84b", width=1.5)),
                 hoverinfo="skip", showlegend=False))
             traces.append(go.Scatter(
-                x=[r["arch_pca_PC1"]], y=[r["arch_pca_PC2"]], mode="markers",
+                x=[sel_x], y=[sel_y], mode="markers",
                 marker=dict(size=dot_size+4, color=ARCHETYPE_COLOR[arch],
                             opacity=1.0, line=dict(color="#0f1623", width=1.8)),
                 customdata=[cdata(sel)[0]], hovertemplate=HOVER_TPL,
                 showlegend=False))
     return traces
 
-def build_layout(_plot_df):
+
+def build_trace_id_map(plot_df, selected_id, dimmed_arch):
+    trace_ids = []
+    for arch in ARCHETYPE_ORDER:
+        sub = plot_df[plot_df["primary_archetype"] == arch]
+        if sub.empty:
+            continue
+        rest = sub[sub["id"] != selected_id] if selected_id else sub
+        sel = sub[sub["id"] == selected_id] if selected_id else sub.iloc[0:0]
+        if not rest.empty:
+            trace_ids.append(rest["id"].astype(str).tolist())
+        if not sel.empty:
+            selected_ids = sel["id"].astype(str).tolist()
+            trace_ids.append(selected_ids)
+            trace_ids.append(selected_ids)
+    return trace_ids
+
+
+def resolve_clicked_player_id(plot_df, selected_id, dimmed_arch, trace_index, point_index):
+    trace_map = build_trace_id_map(plot_df, selected_id, dimmed_arch)
+    if trace_index is None or point_index is None:
+        return None
+    try:
+        trace_ids = trace_map[int(trace_index)]
+        return trace_ids[int(point_index)] if 0 <= int(point_index) < len(trace_ids) else None
+    except (IndexError, ValueError, TypeError):
+        return None
+
+def compress_negative_tail(values, threshold=-4.0, scale=2.0):
+    arr = np.asarray(values, dtype=float)
+    out = arr.copy()
+    mask = np.isfinite(arr) & (arr < threshold)
+    out[mask] = threshold - scale * np.log1p(threshold - arr[mask])
+    if isinstance(values, pd.Series):
+        return pd.Series(out, index=values.index)
+    return out
+
+
+def compress_positive_tail(values, threshold=4.0, scale=2.0):
+    arr = np.asarray(values, dtype=float)
+    out = arr.copy()
+    mask = np.isfinite(arr) & (arr > threshold)
+    out[mask] = threshold + scale * np.log1p(arr[mask] - threshold)
+    if isinstance(values, pd.Series):
+        return pd.Series(out, index=values.index)
+    return out
+
+
+def d2_pc2_tick_spec(series):
+    vals = pd.to_numeric(series, errors="coerce").dropna()
+    if vals.empty:
+        return None
+    base_ticks = [-50, -40, -30, -20, -10, -5, 0]
+    upper = float(vals.max())
+    if upper >= 1:
+        base_ticks.extend([1, 2, 3, 4, 5])
+    tick_vals = []
+    tick_text = []
+    low_bound = float(vals.min()) - 1e-9
+    high_bound = upper + 1e-9
+    for tick in base_ticks:
+        if low_bound <= tick <= high_bound:
+            tick_vals.append(float(compress_negative_tail([tick])[0]))
+            tick_text.append(str(int(tick)) if float(tick).is_integer() else f"{tick:g}")
+    return {"tickmode": "array", "tickvals": tick_vals, "ticktext": tick_text}
+
+
+def d2_pc1_tick_spec(series):
+    vals = pd.to_numeric(series, errors="coerce").dropna()
+    if vals.empty:
+        return None
+    base_ticks = [-10, -5, 0, 5, 10, 15, 20]
+    low_bound = float(vals.min()) - 1e-9
+    high_bound = float(vals.max()) + 1e-9
+    tick_vals = []
+    tick_text = []
+    for tick in base_ticks:
+        if low_bound <= tick <= high_bound:
+            tick_vals.append(float(compress_positive_tail([tick])[0]))
+            tick_text.append(str(int(tick)) if float(tick).is_integer() else f"{tick:g}")
+    return {"tickmode": "array", "tickvals": tick_vals, "ticktext": tick_text}
+
+
+def robust_axis_range(series, selected_value=None, min_span=1.0, pad_ratio=0.08):
+    vals = pd.to_numeric(series, errors="coerce").dropna()
+    if vals.empty:
+        return [-1.0, 1.0]
+    lo = float(vals.min())
+    hi = float(vals.max())
+    lo = min(lo, 0.0)
+    hi = max(hi, 0.0)
+    if selected_value is not None and pd.notna(selected_value):
+        selected_value = float(selected_value)
+        lo = min(lo, selected_value)
+        hi = max(hi, selected_value)
+    span = hi - lo
+    if span < min_span:
+        mid = (hi + lo) / 2.0
+        half = min_span / 2.0
+        lo, hi = mid - half, mid + half
+        span = hi - lo
+    pad = max(span * pad_ratio, min_span * 0.05)
+    return [lo - pad, hi + pad]
+
+
+def build_layout(_plot_df, selected_id=None, compress_pc1_tail=False, compress_pc2_tail=False):
     axis = dict(gridcolor="rgba(0,0,0,0)", zeroline=True,
                 zerolinecolor="#1e2d47", zerolinewidth=1.2,
                 tickfont=dict(size=9, family="JetBrains Mono, monospace", color="#4a6080"),
                 linecolor="#1e2d47", linewidth=1)
     tf = dict(size=10, family="JetBrains Mono, monospace", color="#4a6080")
+    selected_row = _plot_df[_plot_df["id"] == selected_id] if selected_id else _plot_df.iloc[0:0]
+    selected_x = selected_row["arch_pca_PC1"].iloc[0] if not selected_row.empty else None
+    selected_y = selected_row["arch_pca_PC2"].iloc[0] if not selected_row.empty else None
+    x_series = compress_positive_tail(_plot_df["arch_pca_PC1"]) if compress_pc1_tail else _plot_df["arch_pca_PC1"]
+    x_selected = float(compress_positive_tail([selected_x])[0]) if compress_pc1_tail and selected_x is not None else selected_x
+    x_range = robust_axis_range(x_series, selected_value=x_selected)
+    y_series = compress_negative_tail(_plot_df["arch_pca_PC2"]) if compress_pc2_tail else _plot_df["arch_pca_PC2"]
+    y_selected = float(compress_negative_tail([selected_y])[0]) if compress_pc2_tail and selected_y is not None else selected_y
+    y_range = robust_axis_range(y_series, selected_value=y_selected)
+    x_axis_extra = d2_pc1_tick_spec(_plot_df["arch_pca_PC1"]) if compress_pc1_tail else {}
+    y_axis_extra = d2_pc2_tick_spec(_plot_df["arch_pca_PC2"]) if compress_pc2_tail else {}
     return go.Layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#0f1623",
         margin=dict(l=64, r=18, t=16, b=60),
-        xaxis=dict(title="PC1 · size ↔ creator guard traits", title_font=tf, **axis),
-        yaxis=dict(title="PC2 · shooting / spacing strength", title_font=tf, **axis),
+        xaxis=dict(
+            title="PC1 · spacing ↔ rebounding",
+            title_font=tf,
+            range=x_range,
+            **(x_axis_extra or {}),
+            **axis,
+        ),
+        yaxis=dict(
+            title="PC2 · lead guards ↔ rim protectors",
+            title_font=tf,
+            range=y_range,
+            **(y_axis_extra or {}),
+            **axis,
+        ),
         hoverlabel=dict(bgcolor="#1a2540", bordercolor="#c8a84b",
                         font=dict(family="JetBrains Mono, monospace",
                                   size=11.5, color="#c8d4e8")),
@@ -957,6 +1116,7 @@ def make_sidebar(prefix, df, conferences):
     bpg_min, bpg_max = slider_range("bpg", 0.1)
     spg_min, spg_max = slider_range("spg", 0.1)
     h_min, h_max = slider_range("heightIn", 1)
+    eligibility_min, eligibility_max = slider_range("eligibility", 1)
     has_bpm = pd.to_numeric(df["bpm"], errors="coerce").notna().any() if "bpm" in df.columns else False
     has_porpag = pd.to_numeric(df["porpag"], errors="coerce").notna().any() if "porpag" in df.columns else False
     bpm_min, bpm_max = slider_range("bpm", 0.1) if has_bpm else (0, 0)
@@ -1046,6 +1206,14 @@ def make_sidebar(prefix, df, conferences):
                       class_="sb-section-head"),
                ui.input_checkbox_group(f"{prefix}_classes", None,
                                        choices={c: c for c in CLASSES}),
+               class_="sb-section"),
+        ui.div(ui.div(ui.span("Eligibility Used"),
+                      ui.tags.button("clear", class_="clear-btn",
+                          onclick=f"Shiny.setInputValue('{prefix}_clear_eligibility',Math.random())"),
+                      class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_eligibility", None,
+                               min=eligibility_min, max=eligibility_max,
+                               value=[eligibility_min, eligibility_max], step=1),
                class_="sb-section"),
         ui.div(ui.div(ui.span("Conference"),
                       ui.tags.button("clear", class_="clear-btn",
@@ -1164,6 +1332,7 @@ def apply_single_tag_filter(df, tag):
     if tag and tag != "none" and tag in df.columns:
         return df[df[tag].fillna(False)]
     return df
+
 
 def qualification_diagnostic_items(df, mode):
     mode = mode or "none"
@@ -1313,6 +1482,10 @@ app_ui = ui.page_fluid(
             /* star button inside modal */
             .player-name-row {
                 display:flex; align-items:flex-start; gap:10px; margin-bottom:3px;
+            }
+            #detail-body, .detail-col, .player-name, .sim-main .nm, .sim-pct,
+            .wl-card-name, .wl-stat .n, .wl-title {
+                color:var(--ink);
             }
             .star-btn {
                 background:none; border:none; cursor:pointer;
@@ -1663,6 +1836,135 @@ app_ui = ui.page_fluid(
             }
         """),
         ui.tags.script("""
+            var scatterConfigs = {
+                d1_scatter: { inputId: 'd1_plot_click' },
+                d2_scatter: { inputId: 'd2_plot_click' },
+                d3_scatter: { inputId: 'd3_plot_click' }
+            };
+
+            function emitScatterSelection(outputId, payload, extra) {
+                var cfg = scatterConfigs[outputId];
+                if (!cfg || !window.Shiny || !window.Shiny.setInputValue || !payload) return;
+                window.Shiny.setInputValue(cfg.inputId, payload, {priority:'event'});
+            }
+
+            function pointPayloadFromTarget(wrapper, point) {
+                var trace = point.closest('.scatterlayer .trace');
+                if (!trace) return null;
+                var traceEls = Array.from(wrapper.querySelectorAll('.scatterlayer .trace'));
+                var traceIndex = traceEls.indexOf(trace);
+                if (traceIndex < 0) return null;
+                var pointEls = Array.from(trace.querySelectorAll('.points path'));
+                var pointIndex = pointEls.indexOf(point);
+                if (pointIndex < 0) return null;
+                return { trace_index: traceIndex, point_index: pointIndex };
+            }
+
+            function nearestPointPayload(wrapper, clientX, clientY, maxDistance) {
+                var traceEls = Array.from(wrapper.querySelectorAll('.scatterlayer .trace'));
+                var best = null;
+                traceEls.forEach(function(traceEl, traceIndex) {
+                    var pointEls = Array.from(traceEl.querySelectorAll('.points path'));
+                    pointEls.forEach(function(pointEl, pointIndex) {
+                        var rect = pointEl.getBoundingClientRect();
+                        var cx = rect.left + rect.width / 2;
+                        var cy = rect.top + rect.height / 2;
+                        var dx = cx - clientX;
+                        var dy = cy - clientY;
+                        var distSq = dx * dx + dy * dy;
+                        if (!best || distSq < best.distSq) {
+                            best = {
+                                trace_index: traceIndex,
+                                point_index: pointIndex,
+                                distSq: distSq
+                            };
+                        }
+                    });
+                });
+                if (!best) return null;
+                if (best.distSq > maxDistance * maxDistance) return null;
+                return {
+                    trace_index: best.trace_index,
+                    point_index: best.point_index
+                };
+            }
+
+            function bindPlotlyScatterClicks() {
+                Object.keys(scatterConfigs).forEach(function(outputId) {
+                    var wrapper = document.getElementById(outputId);
+                    var graph = wrapper ? wrapper.querySelector('.js-plotly-plot') : null;
+                    if (!graph || graph.dataset.codexPlotlyClickBound === '1' || typeof graph.on !== 'function') {
+                        return;
+                    }
+                    graph.on('plotly_hover', function(ev) {
+                        var pt = ev && ev.points && ev.points[0];
+                        if (!pt) return;
+                        var custom = pt.customdata;
+                        var playerId = Array.isArray(custom) ? custom[7] : null;
+                        graph.dataset.codexHoverPlayerId = playerId || '';
+                        graph.dataset.codexHoverTraceIndex = String(pt.curveNumber ?? '');
+                        graph.dataset.codexHoverPointIndex = String(pt.pointNumber ?? '');
+                        graph.dataset.codexHoverAt = String(Date.now());
+                    });
+                    graph.on('plotly_click', function(ev) {
+                        var pt = ev && ev.points && ev.points[0];
+                        if (!pt) return;
+                        var custom = pt.customdata;
+                        var playerId = Array.isArray(custom) ? custom[7] : null;
+                        window.setTimeout(function() {
+                            emitScatterSelection(outputId, {
+                            player_id: playerId || null,
+                            trace_index: pt.curveNumber,
+                            point_index: pt.pointNumber
+                            });
+                        }, 0);
+                    });
+                    graph.dataset.codexPlotlyClickBound = '1';
+                });
+            }
+
+            function bindDocumentScatterClicks() {
+                if (!document.body || document.body.dataset.codexGlobalScatterBound === '1') return;
+                document.addEventListener('click', function(ev) {
+                    var target = ev.target;
+                    if (!(target instanceof Element)) return;
+                    var wrapper = target.closest('#d1_scatter, #d2_scatter, #d3_scatter');
+                    if (!wrapper) return;
+                    var cfg = scatterConfigs[wrapper.id];
+                    if (!cfg) return;
+                    var graph = wrapper.querySelector('.js-plotly-plot');
+                    var hoverPlayerId = graph ? (graph.dataset.codexHoverPlayerId || '') : '';
+                    var hoverTraceIndex = graph ? graph.dataset.codexHoverTraceIndex : '';
+                    var hoverPointIndex = graph ? graph.dataset.codexHoverPointIndex : '';
+                    var hoverAt = graph ? Number(graph.dataset.codexHoverAt || '0') : 0;
+                    if (hoverPlayerId && hoverAt && Date.now() - hoverAt < 1500) {
+                        window.Shiny.setInputValue(cfg.inputId, {
+                            player_id: hoverPlayerId,
+                            trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
+                            point_index: hoverPointIndex === '' ? null : Number(hoverPointIndex)
+                        }, {priority:'event'});
+                        return;
+                    }
+                    if (graph && hoverPlayerId) {
+                        window.Shiny.setInputValue(cfg.inputId, {
+                            player_id: hoverPlayerId,
+                            trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
+                            point_index: hoverPointIndex === '' ? null : Number(hoverPointIndex)
+                        }, {priority:'event'});
+                        return;
+                    }
+                    var point = target.closest('.scatterlayer .points path');
+                    var payload = point ? pointPayloadFromTarget(wrapper, point) : null;
+                    if (!payload) {
+                        payload = nearestPointPayload(wrapper, ev.clientX, ev.clientY, 18);
+                    }
+                    if (payload && window.Shiny && window.Shiny.setInputValue) {
+                        window.Shiny.setInputValue(cfg.inputId, payload, {priority:'event'});
+                    }
+                }, true);
+                document.body.dataset.codexGlobalScatterBound = '1';
+            }
+
             function switchTab(tab) {
                 document.querySelectorAll('.tab-panel').forEach(function(p) {
                     p.classList.remove('active');
@@ -1672,6 +1974,9 @@ app_ui = ui.page_fluid(
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
+                if (window.Shiny && window.Shiny.setInputValue) {
+                    window.Shiny.setInputValue('active_tab', tab, {priority: 'event'});
+                }
 
                 requestAnimationFrame(function() {
                     requestAnimationFrame(function() {
@@ -1683,6 +1988,21 @@ app_ui = ui.page_fluid(
                     });
                 });
             }
+
+            function initScatterBindings() {
+                bindPlotlyScatterClicks();
+                bindDocumentScatterClicks();
+                if (window.Shiny && window.Shiny.setInputValue && document.body.dataset.codexSelectionsReset !== '1') {
+                    window.Shiny.setInputValue('reset_all_selections', Math.random(), {priority: 'event'});
+                    document.body.dataset.codexSelectionsReset = '1';
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', initScatterBindings);
+            document.addEventListener('shiny:connected', initScatterBindings);
+            document.addEventListener('shiny:value', function() {
+                bindPlotlyScatterClicks();
+            }, true);
         """),
     ),
 
@@ -1799,6 +2119,31 @@ def server(input, output, session):
     d2_fig = go.FigureWidget()
     d3_fig = go.FigureWidget()
 
+    def sync_scatter(fig, plot_df, selected_id, dimmed_arch, click_handler):
+        compress_pc1_tail = fig is d2_fig
+        compress_pc2_tail = fig is d2_fig
+        traces = build_traces(
+            plot_df,
+            selected_id,
+            dimmed_arch,
+            compress_pc1_tail=compress_pc1_tail,
+            compress_pc2_tail=compress_pc2_tail,
+        )
+        layout = build_layout(
+            plot_df,
+            selected_id=selected_id,
+            compress_pc1_tail=compress_pc1_tail,
+            compress_pc2_tail=compress_pc2_tail,
+        )
+        with fig.batch_update():
+            fig.data = []
+            for trace in traces:
+                fig.add_trace(trace)
+            fig.update_layout(layout)
+        for trace in fig.data:
+            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
+                trace.on_click(click_handler)
+
     def sync_radar_selection(player_ids):
         available = [pid for pid, *_ in watchlist_rows(player_ids)]
         selected = [pid for pid in radar_selected.get() if pid in available][:2]
@@ -1830,6 +2175,14 @@ def server(input, output, session):
             curr = set(rv.get())
             curr.discard(pos) if pos in curr else curr.add(pos)
             rv.set(curr)
+
+    @reactive.effect
+    @reactive.event(input.reset_all_selections)
+    def _reset_all_selections():
+        d1_sel.set(None)
+        d2_sel.set(None)
+        d3_sel.set(None)
+        ui.modal_remove()
 
     # ── Single modal opener — handles d1p / d2p / d3p prefixes ───────────
     @reactive.effect
@@ -1894,6 +2247,13 @@ def server(input, output, session):
         ui.update_checkbox_group("d1_classes", selected=[])
 
     @reactive.effect
+    @reactive.event(input.d1_clear_eligibility)
+    def _d1_clear_eligibility():
+        vals = pd.to_numeric(d1_df["eligibility"], errors="coerce").dropna()
+        if not vals.empty:
+            ui.update_slider("d1_eligibility", value=[int(vals.min()), int(vals.max())])
+
+    @reactive.effect
     @reactive.event(input.d1_clear_conf)
     def _d1_clear_conf():
         ui.update_checkbox_group("d1_confs", selected=[])
@@ -1913,6 +2273,26 @@ def server(input, output, session):
             import random
             modal_req.set((sid, random.random()))
 
+    @reactive.effect
+    @reactive.event(input.d1_plot_click)
+    def _d1_plot_click():
+        payload = input.d1_plot_click() or {}
+        sid = None
+        if isinstance(payload, dict):
+            sid = payload.get("player_id")
+            if not sid:
+                sid = resolve_clicked_player_id(
+                    d1_plot_df(),
+                    d1_sel.get(),
+                    d1_dim.get(),
+                    payload.get("trace_index"),
+                    payload.get("point_index"),
+                )
+        if sid:
+            import random
+            d1_sel.set(sid)
+            modal_req.set((sid, random.random()))
+
     @reactive.calc
     def d1_filtered():
         d = d1_df.copy()
@@ -1929,6 +2309,7 @@ def server(input, output, session):
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d1_classes() or [])
         if cs: d = d[d["cls"].isin(cs)]
+        lo, hi = input.d1_eligibility(); d = d[(d["eligibility"] >= lo) & (d["eligibility"] <= hi)]
         xs = list(input.d1_confs() or [])
         if xs: d = d[d["conf"].isin(xs)]
         teams = list(input.d1_team() or [])
@@ -1976,21 +2357,18 @@ def server(input, output, session):
                 return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
         return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
 
+    @output
+    @render.text
+    def d1_trace_map():
+        return json.dumps(build_trace_id_map(d1_plot_df(), d1_sel.get(), d1_dim.get()))
+
     @render_widget
     def d1_scatter():
         return d1_fig
 
     @reactive.effect
     def _d1_sync():
-        traces = build_traces(d1_plot_df(), d1_sel.get(), d1_dim.get())
-        layout = build_layout(d1_plot_df())
-        with d1_fig.batch_update():
-            d1_fig.data = []
-            for t in traces: d1_fig.add_trace(t)
-            d1_fig.update_layout(layout)
-        for trace in d1_fig.data:
-            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
-                trace.on_click(_d1_clicked)
+        sync_scatter(d1_fig, d1_plot_df(), d1_sel.get(), d1_dim.get(), _d1_clicked)
 
     def _d1_clicked(trace, points, selector):
         if not points or not points.point_inds: return
@@ -2025,6 +2403,13 @@ def server(input, output, session):
         ui.update_checkbox_group("d2_classes", selected=[])
 
     @reactive.effect
+    @reactive.event(input.d2_clear_eligibility)
+    def _d2_clear_eligibility():
+        vals = pd.to_numeric(d2_df["eligibility"], errors="coerce").dropna()
+        if not vals.empty:
+            ui.update_slider("d2_eligibility", value=[int(vals.min()), int(vals.max())])
+
+    @reactive.effect
     @reactive.event(input.d2_clear_conf)
     def _d2_clear_conf():
         ui.update_checkbox_group("d2_confs", selected=[])
@@ -2044,6 +2429,26 @@ def server(input, output, session):
             import random
             modal_req.set((sid, random.random()))
 
+    @reactive.effect
+    @reactive.event(input.d2_plot_click)
+    def _d2_plot_click():
+        payload = input.d2_plot_click() or {}
+        sid = None
+        if isinstance(payload, dict):
+            sid = payload.get("player_id")
+            if not sid:
+                sid = resolve_clicked_player_id(
+                    d2_plot_df(),
+                    d2_sel.get(),
+                    d2_dim.get(),
+                    payload.get("trace_index"),
+                    payload.get("point_index"),
+                )
+        if sid:
+            import random
+            d2_sel.set(sid)
+            modal_req.set((sid, random.random()))
+
     @reactive.calc
     def d2_filtered():
         d = d2_df.copy()
@@ -2058,6 +2463,7 @@ def server(input, output, session):
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d2_classes() or [])
         if cs: d = d[d["cls"].isin(cs)]
+        lo, hi = input.d2_eligibility(); d = d[(d["eligibility"] >= lo) & (d["eligibility"] <= hi)]
         xs = list(input.d2_confs() or [])
         if xs: d = d[d["conf"].isin(xs)]
         teams = list(input.d2_team() or [])
@@ -2103,21 +2509,18 @@ def server(input, output, session):
                 return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
         return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
 
+    @output
+    @render.text
+    def d2_trace_map():
+        return json.dumps(build_trace_id_map(d2_plot_df(), d2_sel.get(), d2_dim.get()))
+
     @render_widget
     def d2_scatter():
         return d2_fig
 
     @reactive.effect
     def _d2_sync():
-        traces = build_traces(d2_plot_df(), d2_sel.get(), d2_dim.get())
-        layout = build_layout(d2_plot_df())
-        with d2_fig.batch_update():
-            d2_fig.data = []
-            for t in traces: d2_fig.add_trace(t)
-            d2_fig.update_layout(layout)
-        for trace in d2_fig.data:
-            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
-                trace.on_click(_d2_clicked)
+        sync_scatter(d2_fig, d2_plot_df(), d2_sel.get(), d2_dim.get(), _d2_clicked)
 
     def _d2_clicked(trace, points, selector):
         if not points or not points.point_inds: return
@@ -2152,6 +2555,13 @@ def server(input, output, session):
         ui.update_checkbox_group("d3_classes", selected=[])
 
     @reactive.effect
+    @reactive.event(input.d3_clear_eligibility)
+    def _d3_clear_eligibility():
+        vals = pd.to_numeric(d3_df["eligibility"], errors="coerce").dropna()
+        if not vals.empty:
+            ui.update_slider("d3_eligibility", value=[int(vals.min()), int(vals.max())])
+
+    @reactive.effect
     @reactive.event(input.d3_clear_conf)
     def _d3_clear_conf():
         ui.update_checkbox_group("d3_confs", selected=[])
@@ -2171,6 +2581,26 @@ def server(input, output, session):
             import random
             modal_req.set((sid, random.random()))
 
+    @reactive.effect
+    @reactive.event(input.d3_plot_click)
+    def _d3_plot_click():
+        payload = input.d3_plot_click() or {}
+        sid = None
+        if isinstance(payload, dict):
+            sid = payload.get("player_id")
+            if not sid:
+                sid = resolve_clicked_player_id(
+                    d3_plot_df(),
+                    d3_sel.get(),
+                    d3_dim.get(),
+                    payload.get("trace_index"),
+                    payload.get("point_index"),
+                )
+        if sid:
+            import random
+            d3_sel.set(sid)
+            modal_req.set((sid, random.random()))
+
     @reactive.calc
     def d3_filtered():
         d = d3_df.copy()
@@ -2185,6 +2615,7 @@ def server(input, output, session):
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d3_classes() or [])
         if cs: d = d[d["cls"].isin(cs)]
+        lo, hi = input.d3_eligibility(); d = d[(d["eligibility"] >= lo) & (d["eligibility"] <= hi)]
         xs = list(input.d3_confs() or [])
         if xs: d = d[d["conf"].isin(xs)]
         teams = list(input.d3_team() or [])
@@ -2230,21 +2661,29 @@ def server(input, output, session):
                 return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
         return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
 
+    @output
+    @render.text
+    def d3_trace_map():
+        return json.dumps(build_trace_id_map(d3_plot_df(), d3_sel.get(), d3_dim.get()))
+
     @render_widget
     def d3_scatter():
         return d3_fig
 
     @reactive.effect
     def _d3_sync():
-        traces = build_traces(d3_plot_df(), d3_sel.get(), d3_dim.get())
-        layout = build_layout(d3_plot_df())
-        with d3_fig.batch_update():
-            d3_fig.data = []
-            for t in traces: d3_fig.add_trace(t)
-            d3_fig.update_layout(layout)
-        for trace in d3_fig.data:
-            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
-                trace.on_click(_d3_clicked)
+        sync_scatter(d3_fig, d3_plot_df(), d3_sel.get(), d3_dim.get(), _d3_clicked)
+
+    @reactive.effect
+    @reactive.event(input.active_tab)
+    def _refresh_active_tab():
+        tab = input.active_tab() or "d2"
+        if tab == "d1":
+            sync_scatter(d1_fig, d1_plot_df(), d1_sel.get(), d1_dim.get(), _d1_clicked)
+        elif tab == "d3":
+            sync_scatter(d3_fig, d3_plot_df(), d3_sel.get(), d3_dim.get(), _d3_clicked)
+        elif tab == "d2":
+            sync_scatter(d2_fig, d2_plot_df(), d2_sel.get(), d2_dim.get(), _d2_clicked)
 
     def _d3_clicked(trace, points, selector):
         if not points or not points.point_inds: return
