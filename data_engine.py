@@ -151,6 +151,9 @@ def height_str(inches: int) -> str:
 
 
 def conf_abbr(name: str) -> str:
+    if pd.isna(name):
+        return "—"
+    name = str(name).strip()
     if not name:
         return "—"
     words = re.sub(r"[^A-Za-z ]", "", name).split()
@@ -451,11 +454,11 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
         return pd.to_numeric(raw.get(col, 0), errors="coerce").fillna(0)
 
     df = pd.DataFrame()
-    df["name"]         = raw["Player Name"].apply(flip_name)
+    df["name"]         = raw["Player Name"].fillna("").astype(str).apply(flip_name)
     df["pos"]          = raw["Position"].apply(refine_position)
     df["cls"]          = raw["Year"].apply(normalize_class)
-    df["team"]         = raw["Team"].str.strip()
-    df["confName"]     = raw["Conference"].str.strip()
+    df["team"]         = raw["Team"].fillna("").astype(str).str.strip()
+    df["confName"]     = raw["Conference"].fillna("").astype(str).str.strip()
     df["conf"]         = df["confName"].apply(conf_abbr)
     df["heightIn"]     = pd.to_numeric(raw["Height"], errors="coerce").fillna(72).round().astype(int)
     df["gp"]           = n("GP").round().astype(int)
@@ -531,9 +534,9 @@ def load_d1_data(
     df = pd.DataFrame()
 
     # Identity
-    df["name"]     = raw["player_name"].str.strip()
-    df["team"]     = raw["team"].str.strip()
-    df["conf"]     = raw["conf"].str.strip()
+    df["name"]     = raw["player_name"].fillna("").astype(str).str.strip()
+    df["team"]     = raw["team"].fillna("").astype(str).str.strip()
+    df["conf"]     = raw["conf"].fillna("").astype(str).str.strip()
     df["confName"] = df["conf"].map(D1_CONF_NAMES).fillna(df["conf"])
 
     # Position — map role to 5-category system
