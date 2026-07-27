@@ -1906,20 +1906,11 @@ app_ui = ui.page_fluid(
                         graph.dataset.codexHoverPointIndex = String(pt.pointNumber ?? '');
                         graph.dataset.codexHoverAt = String(Date.now());
                     });
-                    graph.on('plotly_click', function(ev) {
-                        var pt = ev && ev.points && ev.points[0];
-                        if (!pt) return;
-                        var custom = pt.customdata;
-                        var playerId = Array.isArray(custom) ? custom[7] : null;
-                        graph.dataset.codexLastClickAt = String(Date.now());
-                        graph.dataset.codexLastClickPlayerId = playerId || '';
-                        window.setTimeout(function() {
-                            emitScatterSelection(outputId, {
-                            player_id: playerId || null,
-                            trace_index: pt.curveNumber,
-                            point_index: pt.pointNumber
-                            });
-                        }, 0);
+                    graph.on('plotly_unhover', function() {
+                        graph.dataset.codexHoverPlayerId = '';
+                        graph.dataset.codexHoverTraceIndex = '';
+                        graph.dataset.codexHoverPointIndex = '';
+                        graph.dataset.codexHoverAt = '0';
                     });
                     graph.dataset.codexPlotlyClickBound = '1';
                 });
@@ -1935,23 +1926,11 @@ app_ui = ui.page_fluid(
                     var cfg = scatterConfigs[wrapper.id];
                     if (!cfg) return;
                     var graph = wrapper.querySelector('.js-plotly-plot');
-                    var lastClickAt = graph ? Number(graph.dataset.codexLastClickAt || '0') : 0;
-                    if (lastClickAt && Date.now() - lastClickAt < 600) {
-                        return;
-                    }
                     var hoverPlayerId = graph ? (graph.dataset.codexHoverPlayerId || '') : '';
                     var hoverTraceIndex = graph ? graph.dataset.codexHoverTraceIndex : '';
                     var hoverPointIndex = graph ? graph.dataset.codexHoverPointIndex : '';
                     var hoverAt = graph ? Number(graph.dataset.codexHoverAt || '0') : 0;
-                    if (hoverPlayerId && hoverAt && Date.now() - hoverAt < 1500) {
-                        window.Shiny.setInputValue(cfg.inputId, {
-                            player_id: hoverPlayerId,
-                            trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
-                            point_index: hoverPointIndex === '' ? null : Number(hoverPointIndex)
-                        }, {priority:'event'});
-                        return;
-                    }
-                    if (graph && hoverPlayerId) {
+                    if (hoverPlayerId && hoverAt && Date.now() - hoverAt < 2000) {
                         window.Shiny.setInputValue(cfg.inputId, {
                             player_id: hoverPlayerId,
                             trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
@@ -2146,9 +2125,6 @@ def server(input, output, session):
             for trace in traces:
                 fig.add_trace(trace)
             fig.update_layout(layout)
-        for trace in fig.data:
-            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
-                trace.on_click(click_handler)
 
     def sync_radar_selection(player_ids):
         available = [pid for pid, *_ in watchlist_rows(player_ids)]
