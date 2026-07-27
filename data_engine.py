@@ -121,7 +121,9 @@ def flip_name(s: str) -> str:
 
 
 def normalize_class(s: str) -> str:
-    v = (s or "").lower().replace(".", "").strip()
+    if pd.isna(s):
+        return "SR"
+    v = str(s).lower().replace(".", "").strip()
     if v.startswith("fr"): return "FR"
     if v.startswith("so"): return "SO"
     if v.startswith("jr"): return "JR"
