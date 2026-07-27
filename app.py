@@ -751,7 +751,8 @@ def cdata(d):
     return list(zip(d["name"], d["primary_archetype"].map(archetype_label), d["team"], d["cls"],
                     d["ppg"],  d["rpg"], d["apg"],  d["id"]))
 
-def build_traces(plot_df, selected_id, dimmed_arch, dot_size=9.5, dot_opacity=0.78):
+def build_traces(plot_df, selected_id, dimmed_arch, dot_size=9.5, dot_opacity=0.78,
+                 compress_pc1_tail=False, compress_pc2_tail=False):
     traces = []
     for arch in ARCHETYPE_ORDER:
         sub  = plot_df[plot_df["primary_archetype"] == arch]
@@ -759,22 +760,26 @@ def build_traces(plot_df, selected_id, dimmed_arch, dot_size=9.5, dot_opacity=0.
         alpha = 0.06 if arch in dimmed_arch else dot_opacity
         rest  = sub[sub["id"] != selected_id] if selected_id else sub
         sel   = sub[sub["id"] == selected_id] if selected_id else sub.iloc[0:0]
+        rest_x = compress_positive_tail(rest["arch_pca_PC1"]) if compress_pc1_tail else rest["arch_pca_PC1"]
+        rest_y = compress_negative_tail(rest["arch_pca_PC2"]) if compress_pc2_tail else rest["arch_pca_PC2"]
         if not rest.empty:
             traces.append(go.Scatter(
-                x=rest["arch_pca_PC1"], y=rest["arch_pca_PC2"], mode="markers",
+                x=rest_x, y=rest_y, mode="markers",
                 marker=dict(size=dot_size, color=ARCHETYPE_COLOR[arch],
                             opacity=alpha, line=dict(width=0)),
                 customdata=cdata(rest), hovertemplate=HOVER_TPL,
                 name=archetype_label(arch), showlegend=False))
         if not sel.empty:
             r = sel.iloc[0]
+            sel_x = float(compress_positive_tail([r["arch_pca_PC1"]])[0]) if compress_pc1_tail else r["arch_pca_PC1"]
+            sel_y = float(compress_negative_tail([r["arch_pca_PC2"]])[0]) if compress_pc2_tail else r["arch_pca_PC2"]
             traces.append(go.Scatter(
-                x=[r["arch_pca_PC1"]], y=[r["arch_pca_PC2"]], mode="markers",
+                x=[sel_x], y=[sel_y], mode="markers",
                 marker=dict(size=dot_size+16, color="rgba(0,0,0,0)",
                             line=dict(color="#c8a84b", width=1.5)),
                 hoverinfo="skip", showlegend=False))
             traces.append(go.Scatter(
-                x=[r["arch_pca_PC1"]], y=[r["arch_pca_PC2"]], mode="markers",
+                x=[sel_x], y=[sel_y], mode="markers",
                 marker=dict(size=dot_size+4, color=ARCHETYPE_COLOR[arch],
                             opacity=1.0, line=dict(color="#0f1623", width=1.8)),
                 customdata=[cdata(sel)[0]], hovertemplate=HOVER_TPL,
@@ -809,23 +814,115 @@ def resolve_clicked_player_id(plot_df, selected_id, dimmed_arch, trace_index, po
     except (IndexError, ValueError, TypeError):
         return None
 
-def build_layout(_plot_df):
+def compress_negative_tail(values, threshold=-4.0, scale=2.0):
+    arr = np.asarray(values, dtype=float)
+    out = arr.copy()
+    mask = np.isfinite(arr) & (arr < threshold)
+    out[mask] = threshold - scale * np.log1p(threshold - arr[mask])
+    if isinstance(values, pd.Series):
+        return pd.Series(out, index=values.index)
+    return out
+
+
+def compress_positive_tail(values, threshold=4.0, scale=2.0):
+    arr = np.asarray(values, dtype=float)
+    out = arr.copy()
+    mask = np.isfinite(arr) & (arr > threshold)
+    out[mask] = threshold + scale * np.log1p(arr[mask] - threshold)
+    if isinstance(values, pd.Series):
+        return pd.Series(out, index=values.index)
+    return out
+
+
+def d2_pc2_tick_spec(series):
+    vals = pd.to_numeric(series, errors="coerce").dropna()
+    if vals.empty:
+        return None
+    base_ticks = [-50, -40, -30, -20, -10, -5, 0]
+    upper = float(vals.max())
+    if upper >= 1:
+        base_ticks.extend([1, 2, 3, 4, 5])
+    tick_vals = []
+    tick_text = []
+    low_bound = float(vals.min()) - 1e-9
+    high_bound = upper + 1e-9
+    for tick in base_ticks:
+        if low_bound <= tick <= high_bound:
+            tick_vals.append(float(compress_negative_tail([tick])[0]))
+            tick_text.append(str(int(tick)) if float(tick).is_integer() else f"{tick:g}")
+    return {"tickmode": "array", "tickvals": tick_vals, "ticktext": tick_text}
+
+
+def d2_pc1_tick_spec(series):
+    vals = pd.to_numeric(series, errors="coerce").dropna()
+    if vals.empty:
+        return None
+    base_ticks = [-10, -5, 0, 5, 10, 15, 20]
+    low_bound = float(vals.min()) - 1e-9
+    high_bound = float(vals.max()) + 1e-9
+    tick_vals = []
+    tick_text = []
+    for tick in base_ticks:
+        if low_bound <= tick <= high_bound:
+            tick_vals.append(float(compress_positive_tail([tick])[0]))
+            tick_text.append(str(int(tick)) if float(tick).is_integer() else f"{tick:g}")
+    return {"tickmode": "array", "tickvals": tick_vals, "ticktext": tick_text}
+
+
+def robust_axis_range(series, selected_value=None, min_span=1.0, pad_ratio=0.08):
+    vals = pd.to_numeric(series, errors="coerce").dropna()
+    if vals.empty:
+        return [-1.0, 1.0]
+    lo = float(vals.min())
+    hi = float(vals.max())
+    lo = min(lo, 0.0)
+    hi = max(hi, 0.0)
+    if selected_value is not None and pd.notna(selected_value):
+        selected_value = float(selected_value)
+        lo = min(lo, selected_value)
+        hi = max(hi, selected_value)
+    span = hi - lo
+    if span < min_span:
+        mid = (hi + lo) / 2.0
+        half = min_span / 2.0
+        lo, hi = mid - half, mid + half
+        span = hi - lo
+    pad = max(span * pad_ratio, min_span * 0.05)
+    return [lo - pad, hi + pad]
+
+
+def build_layout(_plot_df, selected_id=None, compress_pc1_tail=False, compress_pc2_tail=False):
     axis = dict(gridcolor="rgba(0,0,0,0)", zeroline=True,
                 zerolinecolor="#1e2d47", zerolinewidth=1.2,
                 tickfont=dict(size=9, family="JetBrains Mono, monospace", color="#4a6080"),
                 linecolor="#1e2d47", linewidth=1)
     tf = dict(size=10, family="JetBrains Mono, monospace", color="#4a6080")
+    selected_row = _plot_df[_plot_df["id"] == selected_id] if selected_id else _plot_df.iloc[0:0]
+    selected_x = selected_row["arch_pca_PC1"].iloc[0] if not selected_row.empty else None
+    selected_y = selected_row["arch_pca_PC2"].iloc[0] if not selected_row.empty else None
+    x_series = compress_positive_tail(_plot_df["arch_pca_PC1"]) if compress_pc1_tail else _plot_df["arch_pca_PC1"]
+    x_selected = float(compress_positive_tail([selected_x])[0]) if compress_pc1_tail and selected_x is not None else selected_x
+    x_range = robust_axis_range(x_series, selected_value=x_selected)
+    y_series = compress_negative_tail(_plot_df["arch_pca_PC2"]) if compress_pc2_tail else _plot_df["arch_pca_PC2"]
+    y_selected = float(compress_negative_tail([selected_y])[0]) if compress_pc2_tail and selected_y is not None else selected_y
+    y_range = robust_axis_range(y_series, selected_value=y_selected)
+    x_axis_extra = d2_pc1_tick_spec(_plot_df["arch_pca_PC1"]) if compress_pc1_tail else {}
+    y_axis_extra = d2_pc2_tick_spec(_plot_df["arch_pca_PC2"]) if compress_pc2_tail else {}
     return go.Layout(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#0f1623",
         margin=dict(l=64, r=18, t=16, b=60),
         xaxis=dict(
             title="PC1 · spacing ↔ rebounding",
             title_font=tf,
+            range=x_range,
+            **(x_axis_extra or {}),
             **axis,
         ),
         yaxis=dict(
             title="PC2 · lead guards ↔ rim protectors",
             title_font=tf,
+            range=y_range,
+            **(y_axis_extra or {}),
             **axis,
         ),
         hoverlabel=dict(bgcolor="#1a2540", bordercolor="#c8a84b",
@@ -1188,8 +1285,6 @@ def make_plot_area(prefix):
         ui.div({"class": "plot-toolbar"},
                ui.div(ui.HTML(""), class_="plot-headline"),
                ui.output_ui(f"{prefix}_plot_meta")),
-        ui.div({"class": "plot-diag-bar"},
-               ui.output_text(f"{prefix}_click_diag")),
         ui.div({"class": "legend-bar"},
                ui.output_ui(f"{prefix}_legend_ui")),
         ui.div({"class": "scatter-wrap"},
@@ -1228,23 +1323,6 @@ def apply_single_tag_filter(df, tag):
         return df[df[tag].fillna(False)]
     return df
 
-
-def format_click_diag(diag):
-    if not isinstance(diag, dict):
-        return "Click check: waiting for browser diagnostics"
-    event = diag.get("event", "none")
-    points = diag.get("points", 0)
-    traces = diag.get("traces", 0)
-    shiny = "yes" if diag.get("shiny_input_found") else "no"
-    active = diag.get("active_tab") or "none"
-    payload = diag.get("payload") or {}
-    trace_idx = payload.get("trace_index", "n/a") if isinstance(payload, dict) else "n/a"
-    point_idx = payload.get("point_index", "n/a") if isinstance(payload, dict) else "n/a"
-    return (
-        f"Click check: active={active} | shiny={shiny} | "
-        f"traces={traces} | points={points} | event={event} | "
-        f"trace={trace_idx} | point={point_idx}"
-    )
 
 def qualification_diagnostic_items(df, mode):
     mode = mode or "none"
@@ -1640,16 +1718,6 @@ app_ui = ui.page_fluid(
                 display:flex; justify-content:space-between; align-items:center;
                 padding:8px 18px 4px; border-bottom:1px solid var(--rule); flex-shrink:0;
             }
-            .plot-diag-bar {
-                padding:6px 18px;
-                border-bottom:1px solid var(--rule);
-                font-family:var(--mono);
-                font-size:10px;
-                color:var(--ink-3);
-                min-height:28px;
-                display:flex;
-                align-items:center;
-            }
             .legend-bar {
                 padding:6px 18px; border-bottom:1px solid var(--rule);
                 display:flex; gap:12px; flex-shrink:0;
@@ -1759,30 +1827,15 @@ app_ui = ui.page_fluid(
         """),
         ui.tags.script("""
             var scatterConfigs = {
-                d1_scatter: { inputId: 'd1_plot_click', diagId: 'd1_click_diag_input' },
-                d2_scatter: { inputId: 'd2_plot_click', diagId: 'd2_click_diag_input' },
-                d3_scatter: { inputId: 'd3_plot_click', diagId: 'd3_click_diag_input' }
+                d1_scatter: { inputId: 'd1_plot_click' },
+                d2_scatter: { inputId: 'd2_plot_click' },
+                d3_scatter: { inputId: 'd3_plot_click' }
             };
 
-            function scatterDiagnostics(outputId, extra) {
-                var wrapper = document.getElementById(outputId);
-                var graph = wrapper ? wrapper.querySelector('.js-plotly-plot') : null;
-                return Object.assign({
-                    output_id: outputId,
-                    wrapper_found: !!wrapper,
-                    graph_found: !!graph,
-                    points: wrapper ? wrapper.querySelectorAll('.scatterlayer .points path').length : 0,
-                    traces: wrapper ? wrapper.querySelectorAll('.scatterlayer .trace').length : 0,
-                    shiny_found: !!window.Shiny,
-                    shiny_input_found: !!(window.Shiny && window.Shiny.setInputValue),
-                    active_tab: (document.querySelector('.tab-panel.active') || {}).id || ''
-                }, extra || {});
-            }
-
-            function pushScatterDiagnostics(outputId, extra) {
+            function emitScatterSelection(outputId, payload, extra) {
                 var cfg = scatterConfigs[outputId];
-                if (!cfg || !window.Shiny || !window.Shiny.setInputValue) return;
-                window.Shiny.setInputValue(cfg.diagId, scatterDiagnostics(outputId, extra), {priority:'deferred'});
+                if (!cfg || !window.Shiny || !window.Shiny.setInputValue || !payload) return;
+                window.Shiny.setInputValue(cfg.inputId, payload, {priority:'event'});
             }
 
             function pointPayloadFromTarget(wrapper, point) {
@@ -1819,13 +1872,45 @@ app_ui = ui.page_fluid(
                     });
                 });
                 if (!best) return null;
-                var maxSq = maxDistance * maxDistance;
-                if (best.distSq > maxSq) return null;
+                if (best.distSq > maxDistance * maxDistance) return null;
                 return {
                     trace_index: best.trace_index,
-                    point_index: best.point_index,
-                    distance: Math.sqrt(best.distSq)
+                    point_index: best.point_index
                 };
+            }
+
+            function bindPlotlyScatterClicks() {
+                Object.keys(scatterConfigs).forEach(function(outputId) {
+                    var wrapper = document.getElementById(outputId);
+                    var graph = wrapper ? wrapper.querySelector('.js-plotly-plot') : null;
+                    if (!graph || graph.dataset.codexPlotlyClickBound === '1' || typeof graph.on !== 'function') {
+                        return;
+                    }
+                    graph.on('plotly_hover', function(ev) {
+                        var pt = ev && ev.points && ev.points[0];
+                        if (!pt) return;
+                        var custom = pt.customdata;
+                        var playerId = Array.isArray(custom) ? custom[7] : null;
+                        graph.dataset.codexHoverPlayerId = playerId || '';
+                        graph.dataset.codexHoverTraceIndex = String(pt.curveNumber ?? '');
+                        graph.dataset.codexHoverPointIndex = String(pt.pointNumber ?? '');
+                        graph.dataset.codexHoverAt = String(Date.now());
+                    });
+                    graph.on('plotly_click', function(ev) {
+                        var pt = ev && ev.points && ev.points[0];
+                        if (!pt) return;
+                        var custom = pt.customdata;
+                        var playerId = Array.isArray(custom) ? custom[7] : null;
+                        window.setTimeout(function() {
+                            emitScatterSelection(outputId, {
+                            player_id: playerId || null,
+                            trace_index: pt.curveNumber,
+                            point_index: pt.pointNumber
+                            });
+                        }, 0);
+                    });
+                    graph.dataset.codexPlotlyClickBound = '1';
+                });
             }
 
             function bindDocumentScatterClicks() {
@@ -1837,30 +1922,37 @@ app_ui = ui.page_fluid(
                     if (!wrapper) return;
                     var cfg = scatterConfigs[wrapper.id];
                     if (!cfg) return;
+                    var graph = wrapper.querySelector('.js-plotly-plot');
+                    var hoverPlayerId = graph ? (graph.dataset.codexHoverPlayerId || '') : '';
+                    var hoverTraceIndex = graph ? graph.dataset.codexHoverTraceIndex : '';
+                    var hoverPointIndex = graph ? graph.dataset.codexHoverPointIndex : '';
+                    var hoverAt = graph ? Number(graph.dataset.codexHoverAt || '0') : 0;
+                    if (hoverPlayerId && hoverAt && Date.now() - hoverAt < 1500) {
+                        window.Shiny.setInputValue(cfg.inputId, {
+                            player_id: hoverPlayerId,
+                            trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
+                            point_index: hoverPointIndex === '' ? null : Number(hoverPointIndex)
+                        }, {priority:'event'});
+                        return;
+                    }
+                    if (graph && hoverPlayerId) {
+                        window.Shiny.setInputValue(cfg.inputId, {
+                            player_id: hoverPlayerId,
+                            trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
+                            point_index: hoverPointIndex === '' ? null : Number(hoverPointIndex)
+                        }, {priority:'event'});
+                        return;
+                    }
                     var point = target.closest('.scatterlayer .points path');
                     var payload = point ? pointPayloadFromTarget(wrapper, point) : null;
-                    var mode = point ? 'direct-target' : 'nearest-search';
                     if (!payload) {
-                        payload = nearestPointPayload(wrapper, ev.clientX, ev.clientY, 16);
+                        payload = nearestPointPayload(wrapper, ev.clientX, ev.clientY, 18);
                     }
-                    pushScatterDiagnostics(wrapper.id, {
-                        event: 'svg-click',
-                        mode: mode,
-                        payload: payload,
-                        target_tag: target.tagName,
-                        target_class: target.getAttribute('class') || ''
-                    });
                     if (payload && window.Shiny && window.Shiny.setInputValue) {
                         window.Shiny.setInputValue(cfg.inputId, payload, {priority:'event'});
                     }
                 }, true);
                 document.body.dataset.codexGlobalScatterBound = '1';
-            }
-
-            function reportAllScatterDiagnostics() {
-                Object.keys(scatterConfigs).forEach(function(outputId) {
-                    pushScatterDiagnostics(outputId, { event: 'heartbeat' });
-                });
             }
 
             function switchTab(tab) {
@@ -1883,28 +1975,24 @@ app_ui = ui.page_fluid(
                         panel.querySelectorAll('.js-plotly-plot').forEach(function(el) {
                             if (window.Plotly) Plotly.Plots.resize(el);
                         });
-                        reportAllScatterDiagnostics();
                     });
                 });
             }
 
             function initScatterBindings() {
+                bindPlotlyScatterClicks();
                 bindDocumentScatterClicks();
-                requestAnimationFrame(function() {
-                    requestAnimationFrame(function() {
-                        reportAllScatterDiagnostics();
-                    });
-                });
-                setTimeout(reportAllScatterDiagnostics, 800);
-                setTimeout(reportAllScatterDiagnostics, 2000);
+                if (window.Shiny && window.Shiny.setInputValue && document.body.dataset.codexSelectionsReset !== '1') {
+                    window.Shiny.setInputValue('reset_all_selections', Math.random(), {priority: 'event'});
+                    document.body.dataset.codexSelectionsReset = '1';
+                }
             }
 
             document.addEventListener('DOMContentLoaded', initScatterBindings);
             document.addEventListener('shiny:connected', initScatterBindings);
             document.addEventListener('shiny:value', function() {
-                reportAllScatterDiagnostics();
+                bindPlotlyScatterClicks();
             }, true);
-            setInterval(reportAllScatterDiagnostics, 1500);
         """),
     ),
 
@@ -2022,8 +2110,21 @@ def server(input, output, session):
     d3_fig = go.FigureWidget()
 
     def sync_scatter(fig, plot_df, selected_id, dimmed_arch, click_handler):
-        traces = build_traces(plot_df, selected_id, dimmed_arch)
-        layout = build_layout(plot_df)
+        compress_pc1_tail = fig is d2_fig
+        compress_pc2_tail = fig is d2_fig
+        traces = build_traces(
+            plot_df,
+            selected_id,
+            dimmed_arch,
+            compress_pc1_tail=compress_pc1_tail,
+            compress_pc2_tail=compress_pc2_tail,
+        )
+        layout = build_layout(
+            plot_df,
+            selected_id=selected_id,
+            compress_pc1_tail=compress_pc1_tail,
+            compress_pc2_tail=compress_pc2_tail,
+        )
         with fig.batch_update():
             fig.data = []
             for trace in traces:
@@ -2064,6 +2165,14 @@ def server(input, output, session):
             curr = set(rv.get())
             curr.discard(pos) if pos in curr else curr.add(pos)
             rv.set(curr)
+
+    @reactive.effect
+    @reactive.event(input.reset_all_selections)
+    def _reset_all_selections():
+        d1_sel.set(None)
+        d2_sel.set(None)
+        d3_sel.set(None)
+        ui.modal_remove()
 
     # ── Single modal opener — handles d1p / d2p / d3p prefixes ───────────
     @reactive.effect
@@ -2240,11 +2349,6 @@ def server(input, output, session):
 
     @output
     @render.text
-    def d1_click_diag():
-        return format_click_diag(input.d1_click_diag_input())
-
-    @output
-    @render.text
     def d1_trace_map():
         return json.dumps(build_trace_id_map(d1_plot_df(), d1_sel.get(), d1_dim.get()))
 
@@ -2397,11 +2501,6 @@ def server(input, output, session):
 
     @output
     @render.text
-    def d2_click_diag():
-        return format_click_diag(input.d2_click_diag_input())
-
-    @output
-    @render.text
     def d2_trace_map():
         return json.dumps(build_trace_id_map(d2_plot_df(), d2_sel.get(), d2_dim.get()))
 
@@ -2551,11 +2650,6 @@ def server(input, output, session):
             if not row.empty:
                 return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
         return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
-
-    @output
-    @render.text
-    def d3_click_diag():
-        return format_click_diag(input.d3_click_diag_input())
 
     @output
     @render.text
