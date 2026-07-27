@@ -15,9 +15,9 @@ from data_engine import (
 )
 
 HERE = Path(__file__).parent
-CURRENT_D2_SCHEMA_PATH = (
-    HERE.parent.parent
-    / "former_D2_player_comparison"
+BUNDLED_CURRENT_D2_SCHEMA_PATH = HERE / "current_d2_all_players_10mpg_dashboard_schema.csv"
+D2_SCHEMA_RELATIVE_PATH = (
+    Path("former_D2_player_comparison")
     / "transfer"
     / "current_d2_website_method_bundle"
     / "data"
@@ -25,8 +25,18 @@ CURRENT_D2_SCHEMA_PATH = (
 )
 LEGACY_D2_PATH = HERE / "d2_data_cleaned.csv"
 
+
+def resolve_current_d2_schema_path():
+    if BUNDLED_CURRENT_D2_SCHEMA_PATH.exists():
+        return BUNDLED_CURRENT_D2_SCHEMA_PATH
+    for base in (HERE, *HERE.parents):
+        candidate = base / D2_SCHEMA_RELATIVE_PATH
+        if candidate.exists():
+            return candidate
+    return LEGACY_D2_PATH
+
 D2 = load_data(
-    str(CURRENT_D2_SCHEMA_PATH if CURRENT_D2_SCHEMA_PATH.exists() else LEGACY_D2_PATH),
+    str(resolve_current_d2_schema_path()),
     id_prefix="d2p",
     min_mpg=10,
 )
@@ -1896,18 +1906,11 @@ app_ui = ui.page_fluid(
                         graph.dataset.codexHoverPointIndex = String(pt.pointNumber ?? '');
                         graph.dataset.codexHoverAt = String(Date.now());
                     });
-                    graph.on('plotly_click', function(ev) {
-                        var pt = ev && ev.points && ev.points[0];
-                        if (!pt) return;
-                        var custom = pt.customdata;
-                        var playerId = Array.isArray(custom) ? custom[7] : null;
-                        window.setTimeout(function() {
-                            emitScatterSelection(outputId, {
-                            player_id: playerId || null,
-                            trace_index: pt.curveNumber,
-                            point_index: pt.pointNumber
-                            });
-                        }, 0);
+                    graph.on('plotly_unhover', function() {
+                        graph.dataset.codexHoverPlayerId = '';
+                        graph.dataset.codexHoverTraceIndex = '';
+                        graph.dataset.codexHoverPointIndex = '';
+                        graph.dataset.codexHoverAt = '0';
                     });
                     graph.dataset.codexPlotlyClickBound = '1';
                 });
@@ -1927,15 +1930,7 @@ app_ui = ui.page_fluid(
                     var hoverTraceIndex = graph ? graph.dataset.codexHoverTraceIndex : '';
                     var hoverPointIndex = graph ? graph.dataset.codexHoverPointIndex : '';
                     var hoverAt = graph ? Number(graph.dataset.codexHoverAt || '0') : 0;
-                    if (hoverPlayerId && hoverAt && Date.now() - hoverAt < 1500) {
-                        window.Shiny.setInputValue(cfg.inputId, {
-                            player_id: hoverPlayerId,
-                            trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
-                            point_index: hoverPointIndex === '' ? null : Number(hoverPointIndex)
-                        }, {priority:'event'});
-                        return;
-                    }
-                    if (graph && hoverPlayerId) {
+                    if (hoverPlayerId && hoverAt && Date.now() - hoverAt < 2000) {
                         window.Shiny.setInputValue(cfg.inputId, {
                             player_id: hoverPlayerId,
                             trace_index: hoverTraceIndex === '' ? null : Number(hoverTraceIndex),
@@ -2130,9 +2125,6 @@ def server(input, output, session):
             for trace in traces:
                 fig.add_trace(trace)
             fig.update_layout(layout)
-        for trace in fig.data:
-            if hasattr(trace, "customdata") and trace.customdata is not None and len(trace.customdata):
-                trace.on_click(click_handler)
 
     def sync_radar_selection(player_ids):
         available = [pid for pid, *_ in watchlist_rows(player_ids)]

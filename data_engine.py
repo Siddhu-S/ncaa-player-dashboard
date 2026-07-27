@@ -173,6 +173,12 @@ def height_str(inches: int) -> str:
     return f"{ft}'{inch}\""
 
 
+def clean_text_series(series, default: str = "") -> pd.Series:
+    if series is None:
+        return pd.Series(dtype="object")
+    return series.fillna(default).astype(str).str.strip()
+
+
 def conf_abbr(name: str) -> str:
     if pd.isna(name):
         return "—"
@@ -485,13 +491,17 @@ def load_data(csv_path: str, id_prefix: str = "d2p", min_mpg: float | None = Non
     def p(col):
         return normalize_pct_series(raw.get(col, 0))
 
+    def t(col, default=""):
+        return clean_text_series(raw.get(col), default=default)
+
     df = pd.DataFrame()
-    df["name"]         = raw["Player Name"].apply(flip_name)
-    df["pos"]          = raw["Position"].apply(refine_position)
-    df["cls"]          = raw["Year"].apply(normalize_class)
-    df["eligibility"]  = raw["Year"].apply(eligibility_used).astype(int)
-    df["team"]         = raw["Team"].fillna("").astype(str).str.strip()
-    df["confName"]     = raw["Conference"].fillna("").astype(str).str.strip()
+    year_series = raw.get("Year", pd.Series(index=raw.index, dtype="object"))
+    df["name"]         = t("Player Name").apply(flip_name)
+    df["pos"]          = t("Position").apply(refine_position)
+    df["cls"]          = year_series.apply(normalize_class)
+    df["eligibility"]  = year_series.apply(eligibility_used).astype(int)
+    df["team"]         = t("Team")
+    df["confName"]     = t("Conference")
     df["conf"]         = df["confName"].apply(conf_abbr)
     df["heightIn"]     = pd.to_numeric(raw["Height"], errors="coerce").fillna(72).round().astype(int)
     df["gp"]           = n("GP").round().astype(int)
@@ -573,20 +583,24 @@ def load_d1_data(
     def n(col):
         return pd.to_numeric(raw.get(col, 0), errors="coerce").fillna(0)
 
+    def t(col, default=""):
+        return clean_text_series(raw.get(col), default=default)
+
     df = pd.DataFrame()
 
     # Identity
-    df["name"]     = raw["player_name"].str.strip()
-    df["team"]     = raw["team"].str.strip()
-    df["conf"]     = raw["conf"].str.strip()
+    df["name"]     = t("player_name")
+    df["team"]     = t("team")
+    df["conf"]     = t("conf")
     df["confName"] = df["conf"].map(D1_CONF_NAMES).fillna(df["conf"])
 
     # Position — map role to 5-category system
-    df["pos"] = raw["role"].map(D1_ROLE_MAP).fillna("G")
+    df["pos"] = t("role").map(D1_ROLE_MAP).fillna("G")
 
     # Class
-    df["cls"] = raw["yr"].apply(normalize_class)
-    df["eligibility"] = raw["yr"].apply(eligibility_used).astype(int)
+    year_series = raw.get("yr", pd.Series(index=raw.index, dtype="object"))
+    df["cls"] = year_series.apply(normalize_class)
+    df["eligibility"] = year_series.apply(eligibility_used).astype(int)
 
     # Height — already in inches
     df["heightIn"] = pd.to_numeric(raw["height_inches"], errors="coerce").fillna(78).round().astype(int)
