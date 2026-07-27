@@ -38,7 +38,6 @@ def resolve_current_d2_schema_path():
 D2 = load_data(
     str(resolve_current_d2_schema_path()),
     id_prefix="d2p",
-    min_mpg=10,
 )
 D1 = load_d1_data(
     str(HERE / "mbb_with_pca.csv"),
