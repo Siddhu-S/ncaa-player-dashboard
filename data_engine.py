@@ -448,7 +448,7 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
 # D-II LOADER  (original schema)
 # ─────────────────────────────────────────────────────────────────────────
 
-def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
+def load_data(csv_path: str, id_prefix: str = "d2p", min_mpg: float | None = None) -> dict:
     """
     Load D-II dataset (data.csv).
     Column names match the original D-II schema produced by the cleaning pipeline.
@@ -505,6 +505,9 @@ def load_data(csv_path: str, id_prefix: str = "d2p") -> dict:
         df[col] = values
     for col, values in _empty_recruiting_frame(df.index).items():
         df[col] = values
+
+    if min_mpg is not None:
+        df = df[df["mpg"] >= float(min_mpg)].copy()
 
     return _build_output(df, id_prefix)
 
