@@ -1911,6 +1911,8 @@ app_ui = ui.page_fluid(
                         if (!pt) return;
                         var custom = pt.customdata;
                         var playerId = Array.isArray(custom) ? custom[7] : null;
+                        graph.dataset.codexLastClickAt = String(Date.now());
+                        graph.dataset.codexLastClickPlayerId = playerId || '';
                         window.setTimeout(function() {
                             emitScatterSelection(outputId, {
                             player_id: playerId || null,
@@ -1933,6 +1935,10 @@ app_ui = ui.page_fluid(
                     var cfg = scatterConfigs[wrapper.id];
                     if (!cfg) return;
                     var graph = wrapper.querySelector('.js-plotly-plot');
+                    var lastClickAt = graph ? Number(graph.dataset.codexLastClickAt || '0') : 0;
+                    if (lastClickAt && Date.now() - lastClickAt < 600) {
+                        return;
+                    }
                     var hoverPlayerId = graph ? (graph.dataset.codexHoverPlayerId || '') : '';
                     var hoverTraceIndex = graph ? graph.dataset.codexHoverTraceIndex : '';
                     var hoverPointIndex = graph ? graph.dataset.codexHoverPointIndex : '';
