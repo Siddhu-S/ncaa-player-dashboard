@@ -14,8 +14,32 @@ from data_engine import (
 )
 
 HERE = Path(__file__).parent
+BUNDLED_CURRENT_D2_SCHEMA_PATH = HERE / "current_d2_all_players_10mpg_dashboard_schema.csv"
+D2_SCHEMA_RELATIVE_PATH = (
+    Path("former_D2_player_comparison")
+    / "transfer"
+    / "current_d2_website_method_bundle"
+    / "data"
+    / "current_d2_all_players_10mpg_dashboard_schema.csv"
+)
+LEGACY_D2_PATH = HERE / "d2_data_cleaned.csv"
 
-D2 = load_data(str(HERE / "d2_data_cleaned.csv"),            id_prefix="d2p")
+
+def resolve_current_d2_schema_path():
+    if BUNDLED_CURRENT_D2_SCHEMA_PATH.exists():
+        return BUNDLED_CURRENT_D2_SCHEMA_PATH
+    for base in (HERE, *HERE.parents):
+        candidate = base / D2_SCHEMA_RELATIVE_PATH
+        if candidate.exists():
+            return candidate
+    return LEGACY_D2_PATH
+
+
+D2 = load_data(
+    str(resolve_current_d2_schema_path()),
+    id_prefix="d2p",
+    min_mpg=10,
+)
 D1 = load_d1_data(
     str(HERE / "mbb_with_pca.csv"),
     id_prefix="d1p",
