@@ -25,11 +25,7 @@ D2_SCHEMA_RELATIVE_PATH = (
     / "current_d2_all_players_10mpg_dashboard_schema.csv"
 )
 LEGACY_D2_PATH = HERE / "d2_data_cleaned.csv"
-CORE_V3_TRANSFER_RELATIVE_PATH = (
-    Path("core_v3_dashboard_transfer_2026-08-18 copy")
-    / "model"
-    / "memberships.csv"
-)
+CORE_V3_MEMBERSHIPS_PATH = HERE / "core_v3_memberships.csv"
 CORE_V3_UNSTABLE_PATH = HERE / "core_v3_under150_unstable_scores_2026.csv"
 
 
@@ -44,11 +40,7 @@ def resolve_current_d2_schema_path():
 
 
 def resolve_core_v3_memberships_path():
-    for base in (HERE, *HERE.parents):
-        candidate = base / CORE_V3_TRANSFER_RELATIVE_PATH
-        if candidate.exists():
-            return candidate
-    return None
+    return CORE_V3_MEMBERSHIPS_PATH if CORE_V3_MEMBERSHIPS_PATH.exists() else None
 
 
 def resolve_core_v3_unstable_path():
@@ -396,80 +388,85 @@ def make_shot_profile_pie_html(row, player_id):
     if total_attempts <= 0:
         return ui.div("No FGA.", class_="qual-note")
 
-    made_counts = [rim_made, three_made, mid_made]
-    total_makes = sum(made_counts)
-    if total_makes <= 0:
-        return ui.div("No made FG.", class_="qual-note")
+    def shot_slice_color(fg_pct):
+        if fg_pct >= 0.50:
+            return "#2f855a"
+        if fg_pct >= 0.35:
+            return "#d5a437"
+        return "#b95c5c"
 
-    shares = [max(0.0, v / total_makes) for v in made_counts]
+    ordered_rows = [
+        {
+            "label": "RIM",
+            "share_pct": (rim_attempts / total_attempts) * 100,
+            "fg_pct": float(pd.to_numeric(pd.Series([row.get("rim_fg_pct", 0)]), errors="coerce").iloc[0] or 0),
+            "assist_pct": float(pd.to_numeric(pd.Series([row.get("rim_assisted_pct", 0)]), errors="coerce").iloc[0] or 0),
+        },
+        {
+            "label": "3PT",
+            "share_pct": (three_attempts / total_attempts) * 100,
+            "fg_pct": float(pd.to_numeric(pd.Series([row.get("tp", 0)]), errors="coerce").iloc[0] or 0),
+            "assist_pct": float(pd.to_numeric(pd.Series([row.get("three_assisted_pct", 0)]), errors="coerce").iloc[0] or 0),
+        },
+        {
+            "label": "MID",
+            "share_pct": (mid_attempts / total_attempts) * 100,
+            "fg_pct": float(pd.to_numeric(pd.Series([row.get("mid_fg_pct", 0)]), errors="coerce").iloc[0] or 0),
+            "assist_pct": float(pd.to_numeric(pd.Series([row.get("mid_assisted_pct", 0)]), errors="coerce").iloc[0] or 0),
+        },
+    ]
+    segments = [segment for segment in ordered_rows if segment["share_pct"] > 0.05]
 
-    fg_pcts = [
-        float(pd.to_numeric(pd.Series([row.get("rim_fg_pct", 0)]), errors="coerce").iloc[0] or 0),
-        float(pd.to_numeric(pd.Series([row.get("tp", 0)]), errors="coerce").iloc[0] or 0),
-        float(pd.to_numeric(pd.Series([row.get("mid_fg_pct", 0)]), errors="coerce").iloc[0] or 0),
-    ]
-    assisted_pcts = [
-        float(pd.to_numeric(pd.Series([row.get("rim_assisted_pct", 0)]), errors="coerce").iloc[0] or 0),
-        float(pd.to_numeric(pd.Series([row.get("three_assisted_pct", 0)]), errors="coerce").iloc[0] or 0),
-        float(pd.to_numeric(pd.Series([row.get("mid_assisted_pct", 0)]), errors="coerce").iloc[0] or 0),
-    ]
-    labels = ["RIM", "3PT", "MID"]
-    hover_text = [
-        (
-            f"{label}<br>"
-            f"{share * 100:.1f}% of FGM<br>"
-            f"{fg * 100:.1f}% FG · {ast * 100:.1f}% assisted"
-        )
-        for label, share, fg, ast in zip(labels, shares, fg_pcts, assisted_pcts)
-    ]
-    segments = [
-        (label, share, color, hover)
-        for label, share, color, hover in zip(labels, shares, ["#d7a538", "#ca9732", "#c18d29"], hover_text)
-        if share > 0
-    ]
-    if not segments:
-        return ui.div("No made FG.", class_="qual-note")
-
-    # Center the rim slice at the top, then place 3PT on the lower right and MID on the lower left.
-    rotation = 90 + shares[0] * 180
-    size = 220
-    cx = cy = size / 2
+    size_w = 280
+    size_h = 240
+    cx = 140
+    cy = 120
     radius = 92
+    inside_label_threshold = 8.0
 
     def polar(angle_deg, r):
         angle = math.radians(angle_deg - 90)
         return cx + r * math.cos(angle), cy + r * math.sin(angle)
 
     def slice_path(start_deg, end_deg):
-        start_x, start_y = polar(start_deg, radius)
-        end_x, end_y = polar(end_deg, radius)
+        start_x, start_y = polar(end_deg, radius)
+        end_x, end_y = polar(start_deg, radius)
         large_arc = 1 if (end_deg - start_deg) > 180 else 0
         return (
             f"M {cx:.2f} {cy:.2f} "
             f"L {start_x:.2f} {start_y:.2f} "
-            f"A {radius:.2f} {radius:.2f} 0 {large_arc} 1 {end_x:.2f} {end_y:.2f} Z"
+            f"A {radius:.2f} {radius:.2f} 0 {large_arc} 0 {end_x:.2f} {end_y:.2f} Z"
         )
 
-    start_angle = rotation - 90
+    rim_segment = next((segment for segment in segments if segment["label"] == "RIM"), None)
+    start_angle = -(rim_segment["share_pct"] / 100) * 180 if rim_segment else 0
     svg_parts = [
-        f'<svg viewBox="0 0 {size} {size}" width="{size}" height="{size}" '
+        f'<svg viewBox="0 0 {size_w} {size_h}" width="100%" height="100%" '
         'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shot profile pie chart">'
     ]
 
     current_angle = start_angle
-    for label, share, color, hover in segments:
-        sweep = share * 360
+    for segment in segments:
+        label = segment["label"]
+        share_pct = segment["share_pct"]
+        sweep = (share_pct / 100) * 360
         end_angle = current_angle + sweep
         path = slice_path(current_angle, end_angle)
+        fg_pct = segment["fg_pct"]
+        assist_pct = segment["assist_pct"]
+        hover = (
+            f"{label} · {share_pct:.1f}% of FGA · "
+            f"{fg_pct * 100:.1f}% FG · {assist_pct * 100:.1f}% assisted"
+        )
         svg_parts.append(
-            f'<path d="{path}" fill="{color}" stroke="#f4ead4" stroke-width="2">'
-            f"<title>{html.escape(hover.replace('<br>', ' · '))}</title>"
+            f'<path d="{path}" fill="{shot_slice_color(fg_pct)}" stroke="#f4ead4" stroke-width="2">'
+            f"<title>{html.escape(hover)}</title>"
             "</path>"
         )
 
         mid_angle = current_angle + sweep / 2
-        if share >= 0.12:
-            tx, ty = polar(mid_angle, radius * 0.55)
+        if share_pct >= inside_label_threshold:
+            tx, ty = polar(mid_angle, radius * 0.58)
             svg_parts.append(
                 f'<text x="{tx:.2f}" y="{ty:.2f}" fill="#ffffff" font-size="13" '
                 'font-family="Inter, sans-serif" font-weight="700" '
@@ -477,16 +474,17 @@ def make_shot_profile_pie_html(row, player_id):
                 f"{html.escape(label)}</text>"
             )
         else:
-            inner_x, inner_y = polar(mid_angle, radius * 0.82)
-            line_x, line_y = polar(mid_angle, radius * 1.02)
-            text_x, text_y = polar(mid_angle, radius * 1.18)
-            anchor = "start" if text_x >= cx else "end"
+            inner_x, inner_y = polar(mid_angle, radius * 1.04)
+            callout_x_raw, callout_y = polar(mid_angle, radius * 1.22)
+            direction = 1 if callout_x_raw >= cx else -1
+            callout_x = max(32, min(248, callout_x_raw + (direction * 14)))
+            anchor = "start" if direction > 0 else "end"
             svg_parts.append(
-                f'<path d="M {inner_x:.2f} {inner_y:.2f} L {line_x:.2f} {line_y:.2f}" '
+                f'<path d="M {inner_x:.2f} {inner_y:.2f} L {callout_x:.2f} {callout_y:.2f}" '
                 'stroke="#f4ead4" stroke-width="1.5" fill="none" />'
             )
             svg_parts.append(
-                f'<text x="{text_x:.2f}" y="{text_y:.2f}" fill="#ffffff" font-size="12" '
+                f'<text x="{callout_x:.2f}" y="{callout_y:.2f}" fill="#ffffff" font-size="12" '
                 'font-family="Inter, sans-serif" font-weight="700" '
                 f'text-anchor="{anchor}" dominant-baseline="middle">{html.escape(label)}</text>'
             )
