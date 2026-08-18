@@ -383,14 +383,23 @@ def pct_display(value):
 
 
 def make_shot_profile_pie_html(row, player_id):
-    made_counts = [
-        float(pd.to_numeric(pd.Series([row.get("rim_made_total", 0)]), errors="coerce").iloc[0] or 0),
-        float(pd.to_numeric(pd.Series([row.get("pbp_three_made", 0)]), errors="coerce").iloc[0] or 0),
-        float(pd.to_numeric(pd.Series([row.get("pbp_mid_made", 0)]), errors="coerce").iloc[0] or 0),
-    ]
+    rim_made = float(pd.to_numeric(pd.Series([row.get("rim_made_total", 0)]), errors="coerce").iloc[0] or 0)
+    three_made = float(pd.to_numeric(pd.Series([row.get("pbp_three_made", 0)]), errors="coerce").iloc[0] or 0)
+    mid_made = float(pd.to_numeric(pd.Series([row.get("pbp_mid_made", 0)]), errors="coerce").iloc[0] or 0)
+    rim_attempts = float(pd.to_numeric(pd.Series([row.get("rim_attempts_total", 0)]), errors="coerce").iloc[0] or 0)
+    mid_attempts = float(pd.to_numeric(pd.Series([row.get("mid_attempts_total", 0)]), errors="coerce").iloc[0] or 0)
+    three_attempts = (
+        float(pd.to_numeric(pd.Series([row.get("pbp_three_made", 0)]), errors="coerce").iloc[0] or 0)
+        + float(pd.to_numeric(pd.Series([row.get("pbp_three_missed", 0)]), errors="coerce").iloc[0] or 0)
+    )
+    total_attempts = rim_attempts + mid_attempts + three_attempts
+    if total_attempts <= 0:
+        return ui.div("No FGA.", class_="qual-note")
+
+    made_counts = [rim_made, three_made, mid_made]
     total_makes = sum(made_counts)
     if total_makes <= 0:
-        return ui.div("No shot profile available.", class_="qual-note")
+        return ui.div("No made FG.", class_="qual-note")
 
     shares = [max(0.0, v / total_makes) for v in made_counts]
 
@@ -413,9 +422,16 @@ def make_shot_profile_pie_html(row, player_id):
         )
         for label, share, fg, ast in zip(labels, shares, fg_pcts, assisted_pcts)
     ]
+    segments = [
+        (label, share, color, hover)
+        for label, share, color, hover in zip(labels, shares, ["#d7a538", "#ca9732", "#c18d29"], hover_text)
+        if share > 0
+    ]
+    if not segments:
+        return ui.div("No made FG.", class_="qual-note")
+
     # Center the rim slice at the top, then place 3PT on the lower right and MID on the lower left.
     rotation = 90 + shares[0] * 180
-    colors = ["#d7a538", "#ca9732", "#c18d29"]
     size = 220
     cx = cy = size / 2
     radius = 92
@@ -441,7 +457,7 @@ def make_shot_profile_pie_html(row, player_id):
     ]
 
     current_angle = start_angle
-    for label, share, color, hover in zip(labels, shares, colors, hover_text):
+    for label, share, color, hover in segments:
         sweep = share * 360
         end_angle = current_angle + sweep
         path = slice_path(current_angle, end_angle)
@@ -906,6 +922,9 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     ]
     bpm_value = pd.to_numeric(pd.Series([row.get("bpm", np.nan)]), errors="coerce").iloc[0]
     porpag_value = pd.to_numeric(pd.Series([row.get("porpag", np.nan)]), errors="coerce").iloc[0]
+    has_archetype_v2 = bool(row.get("archetype_v2_available", False)) or pd.notna(
+        row.get("archetype_v2_primary_label", pd.NA)
+    )
     if pd.notna(bpm_value):
         statline.append(stat_box("BPM", f"{bpm_value:.1f}", 0))
     if pd.notna(porpag_value):
@@ -953,7 +972,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         for label, note in qualification_notes
     ]
     archetype_v2_scores = []
-    if division_label == "D-I" and bool(row.get("archetype_v2_available", False)):
+    if division_label == "D-I" and has_archetype_v2:
         for code in ARCHETYPE_V2_ORDER:
             score = pd.to_numeric(pd.Series([row.get(code, np.nan)]), errors="coerce").iloc[0]
             if pd.isna(score):
@@ -1078,7 +1097,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                    ui.div(
                        ui.div(ui.tags.b("Primary: "), f"{row['archetype_v2_primary_label']} ({format_weight_pct(row['archetype_v2_primary_weight'])})", class_="qual-note"),
                        ui.div(ui.tags.b("Secondary: "), f"{row['archetype_v2_secondary_label']} ({format_weight_pct(row['archetype_v2_secondary_weight'])})", class_="qual-note"),
-                   ) if division_label == "D-I" and bool(row.get("archetype_v2_available", False)) else ui.div(
+                   ) if division_label == "D-I" and has_archetype_v2 else ui.div(
                        "Unavailable for this player.",
                        class_="qual-note",
                    ),
