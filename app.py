@@ -2917,12 +2917,26 @@ def server(input, output, session):
     @output
     @render.ui
     def d1_plot_meta():
+        filtered = d1_filtered()
+        plotted = d1_plot_df()
+        pc1_non_null = int(pd.to_numeric(plotted["arch_pca_PC1"], errors="coerce").notna().sum()) if "arch_pca_PC1" in plotted.columns else 0
+        pc2_non_null = int(pd.to_numeric(plotted["arch_pca_PC2"], errors="coerce").notna().sum()) if "arch_pca_PC2" in plotted.columns else 0
+        debug_text = (
+            f"D-I debug · loaded {D1_TOTAL} · filtered {len(filtered)} · "
+            f"plot rows {len(plotted)} · PC1 {pc1_non_null} · PC2 {pc2_non_null}"
+        )
         sid = d1_sel.get()
         if sid is not None:
             row = d1_df[d1_df["id"] == sid]
             if not row.empty:
-                return ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta")
-        return ui.div("Hover a dot for details · click to expand", class_="plot-meta")
+                return ui.div(
+                    ui.div(ui.HTML(f'<span class="accent">●</span> {row.iloc[0]["name"]} selected'), class_="plot-meta"),
+                    ui.div(debug_text, class_="plot-meta plot-meta-debug"),
+                )
+        return ui.div(
+            ui.div("Hover a dot for details · click to expand", class_="plot-meta"),
+            ui.div(debug_text, class_="plot-meta plot-meta-debug"),
+        )
 
     @output
     @render.text
