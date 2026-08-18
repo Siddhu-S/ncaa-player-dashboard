@@ -29,6 +29,7 @@ CORE_V3_TRANSFER_RELATIVE_PATH = (
     / "model"
     / "memberships.csv"
 )
+CORE_V3_UNSTABLE_PATH = HERE / "core_v3_under150_unstable_scores_2026.csv"
 
 
 def resolve_current_d2_schema_path():
@@ -47,6 +48,10 @@ def resolve_core_v3_memberships_path():
         if candidate.exists():
             return candidate
     return None
+
+
+def resolve_core_v3_unstable_path():
+    return CORE_V3_UNSTABLE_PATH if CORE_V3_UNSTABLE_PATH.exists() else None
 
 D2 = load_data(
     str(resolve_current_d2_schema_path()),
@@ -208,8 +213,27 @@ def normalize_lookup_key(value):
     return str(value or "").strip().lower()
 
 
+def normalize_team_lookup_key(value):
+    key = normalize_lookup_key(value)
+    key = key.replace("&", " and ")
+    key = key.replace("'", "")
+    key = re.sub(r"[^a-z0-9]+", " ", key)
+    key = re.sub(r"\bsaint\b", "st", key)
+    key = re.sub(r"\bstate\b", "st", key)
+    key = re.sub(r"\bcalifornia\b", "cal", key)
+    key = re.sub(r"\buniversity\b", "u", key)
+    key = re.sub(r"\bnorth carolina\b", "nc", key)
+    key = re.sub(r"\bsouth carolina\b", "sc", key)
+    key = re.sub(r"\btexas a and m\b", "texas am", key)
+    key = re.sub(r"\btexas a m\b", "texas am", key)
+    key = re.sub(r"\bst\b", "st", key)
+    key = re.sub(r"\s+", " ", key).strip()
+    return key
+
+
 def add_archetype_v2_columns(df):
     memberships_path = resolve_core_v3_memberships_path()
+    unstable_path = resolve_core_v3_unstable_path()
     target_columns = [
         *ARCHETYPE_V2_ORDER,
         "archetype_v2_primary_code",
@@ -219,6 +243,9 @@ def add_archetype_v2_columns(df):
         "archetype_v2_secondary_label",
         "archetype_v2_secondary_weight",
         "archetype_v2_available",
+        "archetype_v2_unstable",
+        "archetype_v2_stability_tier",
+        "archetype_v2_stability_note",
     ]
 
     if memberships_path is None:
@@ -231,43 +258,96 @@ def add_archetype_v2_columns(df):
         df["archetype_v2_secondary_label"] = pd.Series(pd.NA, index=df.index, dtype="object")
         df["archetype_v2_secondary_weight"] = pd.Series(np.nan, index=df.index, dtype="float64")
         df["archetype_v2_available"] = pd.Series(False, index=df.index, dtype="bool")
+        df["archetype_v2_unstable"] = pd.Series(False, index=df.index, dtype="bool")
+        df["archetype_v2_stability_tier"] = pd.Series(pd.NA, index=df.index, dtype="object")
+        df["archetype_v2_stability_note"] = pd.Series(pd.NA, index=df.index, dtype="object")
         return
 
     memberships = pd.read_csv(memberships_path)
     memberships["name_key"] = memberships["playerName"].map(normalize_lookup_key)
     memberships["team_key"] = memberships["teamName"].map(normalize_lookup_key)
+    memberships["team_key_robust"] = memberships["teamName"].map(normalize_team_lookup_key)
     memberships["minutes"] = pd.to_numeric(memberships["minutes"], errors="coerce").fillna(0)
     memberships = memberships.sort_values("minutes", ascending=False)
     memberships = memberships.drop_duplicates(["name_key", "team_key"], keep="first").copy()
 
-    weight_frame = memberships[ARCHETYPE_V2_ORDER].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    memberships["archetype_v2_primary_code"] = weight_frame.idxmax(axis=1)
-    memberships["archetype_v2_primary_weight"] = weight_frame.max(axis=1)
+    def finalize_membership_frame(frame, unstable_default=False):
+        weight_frame = frame[ARCHETYPE_V2_ORDER].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        frame[ARCHETYPE_V2_ORDER] = weight_frame
+        frame["archetype_v2_primary_code"] = weight_frame.idxmax(axis=1)
+        frame["archetype_v2_primary_weight"] = weight_frame.max(axis=1)
 
-    def secondary_code(row):
-        ordered = row.sort_values(ascending=False)
-        return ordered.index[1] if len(ordered.index) > 1 else ordered.index[0]
+        def secondary_code(row):
+            ordered = row.sort_values(ascending=False)
+            return ordered.index[1] if len(ordered.index) > 1 else ordered.index[0]
 
-    memberships["archetype_v2_secondary_code"] = weight_frame.apply(secondary_code, axis=1)
-    memberships["archetype_v2_secondary_weight"] = [
-        float(weight_frame.loc[idx, code])
-        for idx, code in zip(weight_frame.index, memberships["archetype_v2_secondary_code"])
-    ]
-    memberships["archetype_v2_primary_label"] = memberships["archetype_v2_primary_code"].map(ARCHETYPE_V2_LABELS)
-    memberships["archetype_v2_secondary_label"] = memberships["archetype_v2_secondary_code"].map(ARCHETYPE_V2_LABELS)
-    memberships["archetype_v2_available"] = memberships["archetype_v2_primary_code"].notna()
+        frame["archetype_v2_secondary_code"] = weight_frame.apply(secondary_code, axis=1)
+        frame["archetype_v2_secondary_weight"] = [
+            float(weight_frame.loc[idx, code])
+            for idx, code in zip(weight_frame.index, frame["archetype_v2_secondary_code"])
+        ]
+        frame["archetype_v2_primary_label"] = frame["archetype_v2_primary_code"].map(ARCHETYPE_V2_LABELS)
+        frame["archetype_v2_secondary_label"] = frame["archetype_v2_secondary_code"].map(ARCHETYPE_V2_LABELS)
+        frame["archetype_v2_available"] = frame["archetype_v2_primary_code"].notna()
+        if "archetype_v2_unstable" not in frame.columns:
+            frame["archetype_v2_unstable"] = unstable_default
+        frame["archetype_v2_unstable"] = frame["archetype_v2_unstable"].fillna(unstable_default).astype(bool)
+        if "archetype_v2_stability_tier" not in frame.columns:
+            frame["archetype_v2_stability_tier"] = pd.Series(pd.NA, index=frame.index, dtype="object")
+        if "archetype_v2_stability_note" not in frame.columns:
+            frame["archetype_v2_stability_note"] = pd.Series(pd.NA, index=frame.index, dtype="object")
+        return frame
+
+    memberships = finalize_membership_frame(memberships, unstable_default=False)
+
+    if unstable_path is not None:
+        unstable = pd.read_csv(unstable_path)
+        unstable["name_key"] = unstable["playerName"].map(normalize_lookup_key)
+        unstable["team_key"] = unstable["teamName"].map(normalize_lookup_key)
+        unstable["team_key_robust"] = unstable["teamName"].map(normalize_team_lookup_key)
+        unstable["minutes"] = pd.to_numeric(unstable["minutes"], errors="coerce").fillna(0)
+        unstable["archetype_v2_unstable"] = unstable["unstableArchetypeFlag"]
+        unstable["archetype_v2_stability_tier"] = unstable["stabilityTier"]
+        unstable["archetype_v2_stability_note"] = unstable["stabilityNote"]
+        unstable = unstable.sort_values("minutes", ascending=False)
+        unstable = unstable.drop_duplicates(["name_key", "team_key"], keep="first").copy()
+        unstable = finalize_membership_frame(unstable, unstable_default=True)
+        memberships = pd.concat([memberships, unstable], ignore_index=True, sort=False)
+        memberships = memberships.sort_values(
+            ["archetype_v2_unstable", "minutes"],
+            ascending=[True, False],
+        )
+        memberships = memberships.drop_duplicates(["name_key", "team_key"], keep="first").copy()
+
+    memberships_robust = memberships.drop_duplicates(
+        ["name_key", "team_key_robust"], keep="first"
+    ).copy()
 
     merge_cols = [
         "name_key",
         "team_key",
+        "team_key_robust",
         *target_columns,
     ]
     memberships = memberships[merge_cols]
+    memberships_robust = memberships_robust[merge_cols]
 
     lookup_df = df[["name", "team"]].copy()
     lookup_df["name_key"] = lookup_df["name"].map(normalize_lookup_key)
     lookup_df["team_key"] = lookup_df["team"].map(normalize_lookup_key)
+    lookup_df["team_key_robust"] = lookup_df["team"].map(normalize_team_lookup_key)
+
     merged = lookup_df.merge(memberships, on=["name_key", "team_key"], how="left")
+    missing_mask = merged["archetype_v2_primary_code"].isna()
+    if missing_mask.any():
+        fallback = lookup_df.loc[missing_mask, ["name_key", "team_key_robust"]].merge(
+            memberships_robust.drop(columns=["team_key"]),
+            on=["name_key", "team_key_robust"],
+            how="left",
+        )
+        fallback.index = merged.index[missing_mask]
+        for col in target_columns:
+            merged.loc[missing_mask, col] = merged.loc[missing_mask, col].fillna(fallback[col])
 
     for col in ARCHETYPE_V2_ORDER:
         df[col] = pd.to_numeric(merged[col], errors="coerce")
@@ -278,6 +358,9 @@ def add_archetype_v2_columns(df):
     df["archetype_v2_secondary_label"] = merged["archetype_v2_secondary_label"]
     df["archetype_v2_secondary_weight"] = pd.to_numeric(merged["archetype_v2_secondary_weight"], errors="coerce")
     df["archetype_v2_available"] = merged["archetype_v2_available"].fillna(False).astype(bool)
+    df["archetype_v2_unstable"] = merged["archetype_v2_unstable"].fillna(False).astype(bool)
+    df["archetype_v2_stability_tier"] = merged["archetype_v2_stability_tier"]
+    df["archetype_v2_stability_note"] = merged["archetype_v2_stability_note"]
 
 
 def archetype_v2_label(value):
@@ -873,6 +956,8 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     player_tags = []
     if is_low_sample:
         player_tags.append("Low sample size")
+    if bool(row.get("archetype_v2_unstable", False)):
+        player_tags.append("Unstable archetype")
     if bool(row.get("transfer_available", False)):
         transfer_from = row.get("transfer_from") or row["team"]
         player_tags.append(f"Available transfer from {transfer_from}")
@@ -882,9 +967,9 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     player_tag_ui = [
         ui.span(
             tag,
-            class_="sample-badge" if tag == "Low sample size" else "pos-badge",
+            class_="sample-badge" if tag in {"Low sample size", "Unstable archetype"} else "pos-badge",
             style=""
-            if tag == "Low sample size"
+            if tag in {"Low sample size", "Unstable archetype"}
             else "color:var(--accent);border-color:var(--accent)",
         )
         for tag in player_tags
@@ -1543,6 +1628,7 @@ def make_sidebar(prefix, df, conferences):
         ui.div(
             ui.div("Sample Size", class_="sb-section-head"),
             ui.input_checkbox(f"{prefix}_exclude_low_sample", "Exclude low sample size", value=False),
+            ui.input_checkbox(f"{prefix}_exclude_unstable_archetypes", "Exclude unstable archetypes", value=False),
             class_="sb-section",
         )
         if prefix == "d1" and "low_sample_size" in df.columns else ui.div()
@@ -1699,9 +1785,17 @@ def make_sidebar(prefix, df, conferences):
                ui.input_slider(f"{prefix}_height", None, min=h_min, max=h_max,
                                value=[h_min, h_max], step=1),
                class_="sb-section"),
-        ui.div({"class": "sb-count"},
-               ui.span("Showing", class_="lbl"),
-               ui.output_text(f"{prefix}_filter_count")),
+        ui.div(
+            {"class": "sb-count"},
+            ui.div(
+                ui.span("Showing", class_="lbl"),
+                ui.output_text(f"{prefix}_filter_count"),
+            ),
+            ui.div(
+                ui.span("Filtered Out", class_="lbl"),
+                ui.output_text(f"{prefix}_filtered_out_count"),
+            ),
+        ),
     )
 
 
@@ -1739,6 +1833,8 @@ def apply_archetype_score_filter(df, mode, min_score):
 
 def apply_archetype_v2_score_filter(df, min_score):
     if "archetype_v2_primary_weight" not in df.columns:
+        return df
+    if float(min_score or 0) <= 0:
         return df
     scores = pd.to_numeric(df["archetype_v2_primary_weight"], errors="coerce").fillna(-1) * 100
     return df[scores >= min_score]
@@ -2640,6 +2736,7 @@ def server(input, output, session):
             confs,
             teams,
             bool(input.d1_exclude_low_sample()),
+            bool(input.d1_exclude_unstable_archetypes()),
             d1_sel.get() is not None,
             bool(d1_dim.get()),
         ]):
@@ -2704,6 +2801,7 @@ def server(input, output, session):
             confs,
             teams,
             bool(input.d1_exclude_low_sample()),
+            bool(input.d1_exclude_unstable_archetypes()),
         ]):
             return False
 
@@ -2753,10 +2851,10 @@ def server(input, output, session):
         compress_pc1_tail = fig is d2_fig
         compress_pc2_tail = fig is d2_fig
         d1_default_view = fig is d1_fig and d1_home_view_active()
-        fixed_x_range = [-3.5, 6.5] if d1_default_view else None
-        fixed_y_range = [-4.5, 4.5] if d1_default_view else None
-        clip_x_range = [-3, 6] if d1_default_view else None
-        clip_y_range = [-4, 4] if d1_default_view else None
+        fixed_x_range = [-5, 6.5] if d1_default_view else None
+        fixed_y_range = [-4.5, 6] if d1_default_view else None
+        clip_x_range = [-4.5, 6] if d1_default_view else None
+        clip_y_range = [-4, 5.5] if d1_default_view else None
         traces = build_traces(
             plot_df,
             selected_id,
@@ -2943,6 +3041,8 @@ def server(input, output, session):
         d = apply_qualification_filter(d, qual_mode)
         if bool(input.d1_exclude_low_sample()):
             d = d[~d["low_sample_size"].fillna(False)]
+        if bool(input.d1_exclude_unstable_archetypes()):
+            d = d[~d["archetype_v2_unstable"].fillna(False)]
         q = (input.d1_q() or "").strip().lower()
         if q: d = d[d["name"].str.lower().str.contains(q, na=False)]
         d = apply_tag_filters(d, list(input.d1_transfer_tags() or []))
@@ -2986,6 +3086,10 @@ def server(input, output, session):
         d = apply_d1_range_filter(d, input.d1_height(), "heightIn", 1)
         if d.empty and d1_filters_are_default():
             return d1_df.copy()
+        if d.empty and q:
+            name_matches = d1_df[d1_df["name"].str.lower().str.contains(q, na=False)]
+            if not name_matches.empty:
+                return name_matches
         return d
 
     @reactive.calc
@@ -2999,6 +3103,11 @@ def server(input, output, session):
     @render.text
     def d1_filter_count():
         return f"{len(d1_filtered())} / {D1_TOTAL}"
+
+    @output
+    @render.text
+    def d1_filtered_out_count():
+        return str(max(0, D1_TOTAL - len(d1_filtered())))
 
     @output
     @render.ui
@@ -3032,6 +3141,10 @@ def server(input, output, session):
             if not zero_reason and bool(input.d1_exclude_low_sample()):
                 probe2 = probe[~probe["low_sample_size"].fillna(False)]
                 apply_step("exclude_low_sample", probe2, "(checked)")
+
+            if not zero_reason and bool(input.d1_exclude_unstable_archetypes()):
+                probe2 = probe[~probe["archetype_v2_unstable"].fillna(False)]
+                apply_step("exclude_unstable_archetypes", probe2, "(checked)")
 
             q = (input.d1_q() or "").strip().lower()
             if not zero_reason and q:
@@ -3249,6 +3362,11 @@ def server(input, output, session):
         return f"{len(d2_filtered())} / {D2_TOTAL}"
 
     @output
+    @render.text
+    def d2_filtered_out_count():
+        return str(max(0, D2_TOTAL - len(d2_filtered())))
+
+    @output
     @render.ui
     def d2_legend_ui():
         return ui.HTML(legend_html(d2_dim.get()))
@@ -3399,6 +3517,11 @@ def server(input, output, session):
     @render.text
     def d3_filter_count():
         return f"{len(d3_filtered())} / {D3_TOTAL}"
+
+    @output
+    @render.text
+    def d3_filtered_out_count():
+        return str(max(0, D3_TOTAL - len(d3_filtered())))
 
     @output
     @render.ui
