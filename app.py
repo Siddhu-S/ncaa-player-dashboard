@@ -917,6 +917,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     rim_assisted_pct = pd.to_numeric(pd.Series([row.get("rim_assisted_pct", np.nan)]), errors="coerce").iloc[0]
     mid_assisted_pct = pd.to_numeric(pd.Series([row.get("mid_assisted_pct", np.nan)]), errors="coerce").iloc[0]
     three_assisted_pct = pd.to_numeric(pd.Series([row.get("three_assisted_pct", np.nan)]), errors="coerce").iloc[0]
+    assisted_fg_pct = pd.to_numeric(pd.Series([row.get("assisted_fg_pct", np.nan)]), errors="coerce").iloc[0]
     rim_made_total = pd.to_numeric(pd.Series([row.get("rim_made_total", np.nan)]), errors="coerce").iloc[0]
     mid_made_total = pd.to_numeric(pd.Series([row.get("pbp_mid_made", np.nan)]), errors="coerce").iloc[0]
     three_made_total = pd.to_numeric(pd.Series([row.get("pbp_three_made", np.nan)]), errors="coerce").iloc[0]
@@ -1032,6 +1033,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     ]
 
     shot_profile_summary = [
+        ("Overall Assisted", assisted_fg_pct, "All made field goals"),
         ("Rim Assisted", rim_assisted_pct, f"{pct_display(rim_fgm_share)} of FGM"),
         ("Mid Assisted", mid_assisted_pct, f"{pct_display(mid_fgm_share)} of FGM"),
         ("3PT Assisted", three_assisted_pct, f"{pct_display(three_fgm_share)} of FGM"),
