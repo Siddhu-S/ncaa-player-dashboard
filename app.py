@@ -441,6 +441,13 @@ def make_shot_profile_pie_html(row, player_id):
     rim_segment = next((segment for segment in segments if segment["label"] == "RIM"), None)
     start_angle = -(rim_segment["share_pct"] / 100) * 180 if rim_segment else 0
     svg_parts = [
+        '<div class="shot-pie-wrap" '
+        'style="position:relative;width:100%;height:100%;min-height:220px;">',
+        '<div class="shot-pie-tooltip" '
+        'style="display:none;position:absolute;left:0;top:0;transform:translate(-50%,-115%);'
+        'background:#2f281d;color:#f3ead7;padding:6px 10px;border-radius:10px;'
+        'font-family:var(--sans);font-size:11px;line-height:1.35;white-space:nowrap;'
+        'pointer-events:none;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.28);"></div>',
         f'<svg viewBox="0 0 {size_w} {size_h}" width="100%" height="100%" '
         'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shot profile pie chart">'
     ]
@@ -458,8 +465,21 @@ def make_shot_profile_pie_html(row, player_id):
             f"{label} · {share_pct:.1f}% of FGA · "
             f"{fg_pct * 100:.1f}% FG · {assist_pct * 100:.1f}% assisted"
         )
+        hover_attr = html.escape(hover, quote=True)
         svg_parts.append(
-            f'<path d="{path}" fill="{shot_slice_color(fg_pct)}" stroke="#f4ead4" stroke-width="2">'
+            f'<path d="{path}" fill="{shot_slice_color(fg_pct)}" stroke="#f4ead4" stroke-width="2" '
+            f'data-tip="{hover_attr}" '
+            'onmousemove="const wrap=this.closest(\'.shot-pie-wrap\');'
+            'const tip=wrap&&wrap.querySelector(\'.shot-pie-tooltip\');'
+            'if(!tip){return;}'
+            'const rect=wrap.getBoundingClientRect();'
+            'tip.textContent=this.dataset.tip;'
+            'tip.style.display=\'block\';'
+            'tip.style.left=(event.clientX-rect.left)+\'px\';'
+            'tip.style.top=(event.clientY-rect.top)+\'px\';" '
+            'onmouseleave="const wrap=this.closest(\'.shot-pie-wrap\');'
+            'const tip=wrap&&wrap.querySelector(\'.shot-pie-tooltip\');'
+            'if(tip){tip.style.display=\'none\';}">'
             f"<title>{html.escape(hover)}</title>"
             "</path>"
         )
@@ -490,7 +510,7 @@ def make_shot_profile_pie_html(row, player_id):
             )
         current_angle = end_angle
 
-    svg_parts.append("</svg>")
+    svg_parts.append("</svg></div>")
     return ui.HTML("".join(svg_parts))
 
 
