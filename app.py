@@ -454,6 +454,38 @@ def make_shot_profile_pie_html(row, player_id):
         'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shot profile pie chart">'
     ]
 
+    if len(segments) == 1:
+        segment = segments[0]
+        label = segment["label"]
+        fg_pct = segment["fg_pct"]
+        assist_pct = segment["assist_pct"]
+        hover = (
+            f"{label} · 100.0% of FGA · "
+            f"{fg_pct * 100:.1f}% FG · {assist_pct * 100:.1f}% assisted"
+        )
+        hover_attr = html.escape(hover, quote=True)
+        svg_parts.append(
+            f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="{shot_slice_color(fg_pct)}" '
+            'stroke="#f4ead4" stroke-width="2" '
+            f'data-tip="{hover_attr}" '
+            'onmousemove="const wrap=this.closest(\'.shot-pie-wrap\');'
+            'const readout=wrap&&wrap.querySelector(\'.shot-pie-readout\');'
+            'if(readout){readout.textContent=this.dataset.tip;}" '
+            'onmouseleave="const wrap=this.closest(\'.shot-pie-wrap\');'
+            'const readout=wrap&&wrap.querySelector(\'.shot-pie-readout\');'
+            f'if(readout){{readout.textContent=\'{html.escape(default_readout, quote=True)}\';}}">'
+            f"<title>{html.escape(hover)}</title>"
+            "</circle>"
+        )
+        svg_parts.append(
+            f'<text x="{cx:.2f}" y="{cy:.2f}" fill="#ffffff" font-size="13" '
+            'font-family="Inter, sans-serif" font-weight="700" '
+            'text-anchor="middle" dominant-baseline="middle">'
+            f"{html.escape(label)}</text>"
+        )
+        svg_parts.append("</svg></div>")
+        return ui.HTML("".join(svg_parts))
+
     current_angle = start_angle
     for segment in segments:
         label = segment["label"]
