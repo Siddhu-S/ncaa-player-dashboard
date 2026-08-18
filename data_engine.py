@@ -401,7 +401,11 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
         return SIM_KEYS
 
     # league averages
-    avg_cols = ["ppg","rpg","apg","spg","bpg","tov","fg","tp","ft","ts","usg","mpg","assisted_fg_pct"]
+    avg_cols = [
+        "ppg","rpg","apg","spg","bpg","tov","pf","fg","tp","ft","ts","usg","mpg",
+        "assisted_fg_pct","efg","ftr","orb_pct","drb_pct","ast_pct","tov_pct",
+        "stl_pct","blk_pct","pf_per_40",
+    ]
     league_avg = {}
     for c in avg_cols:
         if c in df.columns:
@@ -517,6 +521,7 @@ def load_data(csv_path: str, id_prefix: str = "d2p", min_mpg: float | None = Non
     df["spg"]          = n("SPG")
     df["bpg"]          = n("BPG")
     df["tov"]          = n("TOPG")
+    df["pf"]           = n("PFPG") if "PFPG" in raw.columns else pd.Series(np.nan, index=raw.index)
     df["orb"]          = n("ORBPG")
     df["drb"]          = n("DRBPG")
     df["pts_per_40"]   = n("pts_per_40")
@@ -621,6 +626,11 @@ def load_d1_data(
     df["orb"] = n("oreb_per_game")
     df["drb"] = n("dreb_per_game")
     pace_to_40 = 40.0 / df["mpg"].replace(0, np.nan)
+    personal_fouls_per_40 = pd.to_numeric(raw.get("personal_fouls_per_40"), errors="coerce")
+    if personal_fouls_per_40 is None:
+        personal_fouls_per_40 = pd.Series(np.nan, index=raw.index)
+    df["pf_per_40"] = personal_fouls_per_40
+    df["pf"] = (personal_fouls_per_40 / pace_to_40).replace([np.inf, -np.inf], np.nan)
     df["pts_per_40"] = (df["ppg"] * pace_to_40).fillna(0)
     df["reb_per_40"] = (df["rpg"] * pace_to_40).fillna(0)
     df["ast_per_40"] = (df["apg"] * pace_to_40).fillna(0)
@@ -643,6 +653,12 @@ def load_d1_data(
     df["ts"]  = n("TS_pct") / 100.0     # scaled 0-100 → 0-1
     df["ftr"] = n("FTR")
     df["efg"] = n("eFG") / 100.0        # 0-1 for slider
+    df["orb_pct"] = n("ORB_pct")
+    df["drb_pct"] = n("DRB_pct")
+    df["ast_pct"] = n("AST_pct")
+    df["tov_pct"] = n("TOV_pct")
+    df["stl_pct"] = n("Stl_pct")
+    df["blk_pct"] = n("Blk_pct")
 
     # Usage — 0-100 in D-I → /100 for consiwaistency with D-II (both end up ~0.19 mean)
     df["usg"] = n("usg") / 100.0

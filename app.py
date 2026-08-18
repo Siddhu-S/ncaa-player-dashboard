@@ -958,27 +958,56 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     mid_fgm_share = (mid_made_total / total_made) if total_made else 0.0
     three_fgm_share = (three_made_total / total_made) if total_made else 0.0
 
-    statline = [
+    pf_value = pd.to_numeric(pd.Series([row.get("pf", np.nan)]), errors="coerce").iloc[0]
+    season_statline = [
         stat_box("MIN", f"{row['mpg']:.1f}", league_avg["mpg"]),
         stat_box("PTS", f"{row['ppg']:.1f}", league_avg["ppg"]),
         stat_box("REB", f"{row['rpg']:.1f}", league_avg["rpg"]),
         stat_box("AST", f"{row['apg']:.1f}", league_avg["apg"]),
+        stat_box("TOV", f"{row['tov']:.1f}", league_avg["tov"]),
+        stat_box("FOUL", f"{pf_value:.1f}", league_avg["pf"]) if pd.notna(pf_value) else ui.div(),
         stat_box("STL", f"{row['spg']:.2f}", league_avg["spg"]),
         stat_box("BLK", f"{row['bpg']:.2f}", league_avg["bpg"]),
         stat_box("FG%", f"{row['fg']*100:.1f}", league_avg["fg"] * 100),
         stat_box("3P%", f"{row['tp']*100:.1f}", league_avg["tp"] * 100),
+        stat_box("FT%", f"{row['ft']*100:.1f}", league_avg["ft"] * 100),
+        stat_box("USG%", f"{row['usg']*100:.1f}", league_avg["usg"] * 100),
     ]
     bpm_value = pd.to_numeric(pd.Series([row.get("bpm", np.nan)]), errors="coerce").iloc[0]
     porpag_value = pd.to_numeric(pd.Series([row.get("porpag", np.nan)]), errors="coerce").iloc[0]
     has_archetype_v2 = bool(row.get("archetype_v2_available", False)) or pd.notna(
         row.get("archetype_v2_primary_label", pd.NA)
     )
-    if pd.notna(bpm_value):
-        statline.append(stat_box("BPM", f"{bpm_value:.1f}", 0))
-    if pd.notna(porpag_value):
-        statline.append(stat_box("PORPAG", f"{porpag_value:.2f}", 0))
     if pd.notna(assisted_fg_pct):
-        statline.append(stat_box("AST'D FG%", f"{assisted_fg_pct*100:.1f}", 0))
+        season_statline.append(stat_box("AST'D FG%", f"{assisted_fg_pct*100:.1f}", 0))
+    efficiency_statline = []
+    if division_label == "D-I":
+        efficiency_defs = [
+            ("eFG%", row.get("efg", np.nan), league_avg.get("efg", 0), True),
+            ("ORB%", row.get("orb_pct", np.nan), league_avg.get("orb_pct", 0), False),
+            ("DRB%", row.get("drb_pct", np.nan), league_avg.get("drb_pct", 0), False),
+            ("AST%", row.get("ast_pct", np.nan), league_avg.get("ast_pct", 0), False),
+            ("STL%", row.get("stl_pct", np.nan), league_avg.get("stl_pct", 0), False),
+            ("BLK%", row.get("blk_pct", np.nan), league_avg.get("blk_pct", 0), False),
+            ("3P%", row.get("tp", np.nan), league_avg.get("tp", 0), True),
+            ("FT%", row.get("ft", np.nan), league_avg.get("ft", 0), True),
+            ("USG%", row.get("usg", np.nan), league_avg.get("usg", 0), True),
+            ("FTR", row.get("ftr", np.nan), league_avg.get("ftr", 0), False),
+            ("TOV%", row.get("tov_pct", np.nan), league_avg.get("tov_pct", 0), False),
+            ("PF/40", row.get("pf_per_40", np.nan), league_avg.get("pf_per_40", 0), False),
+        ]
+        for label, value, avg_value, as_percent in efficiency_defs:
+            num = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+            avg_num = pd.to_numeric(pd.Series([avg_value]), errors="coerce").iloc[0]
+            if pd.isna(num):
+                continue
+            if as_percent:
+                efficiency_statline.append(stat_box(label, f"{num*100:.1f}", float(avg_num) * 100))
+            else:
+                efficiency_statline.append(stat_box(label, f"{num:.1f}", float(avg_num)))
+    stat_view_id = f"stat-view-{player_id}"
+    season_panel_id = f"season-statline-{player_id}"
+    eff_panel_id = f"efficiency-statline-{player_id}"
     bar_defs = [
         ("PPG", row["ppg"], league_avg["ppg"], ppg_max, None),
         ("RPG", row["rpg"], league_avg["rpg"], 14,      None),
@@ -1160,9 +1189,39 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                    class_="arch-score-panel",
                )),
         ui.div({"class": "detail-col"},
-               ui.div("Season Statline ", ui.span("2025–26", class_="sub"),
-                      class_="col-title"),
-               ui.div({"class": "statline"}, *statline),
+               ui.div(
+                   ui.div("Season Statline ", ui.span("2025–26", class_="sub"), class_="col-title"),
+                   ui.div(
+                       {"class": "statline-toggle",
+                        "id": stat_view_id},
+                       ui.tags.button(
+                           "Season",
+                           class_="pill-btn active",
+                           onclick=(
+                               "const root=this.parentElement;"
+                               f"document.getElementById('{season_panel_id}').style.display='grid';"
+                               f"document.getElementById('{eff_panel_id}').style.display='none';"
+                               "root.querySelectorAll('.pill-btn').forEach(btn=>btn.classList.remove('active'));"
+                               "this.classList.add('active');"
+                           ),
+                       ),
+                       ui.tags.button(
+                           "Efficiency",
+                           class_="pill-btn",
+                           onclick=(
+                               "const root=this.parentElement;"
+                               f"document.getElementById('{season_panel_id}').style.display='none';"
+                               f"document.getElementById('{eff_panel_id}').style.display='grid';"
+                               "root.querySelectorAll('.pill-btn').forEach(btn=>btn.classList.remove('active'));"
+                               "this.classList.add('active');"
+                           ),
+                       ) if efficiency_statline else ui.div(),
+                       style="display:flex;gap:8px;align-items:center;",
+                   ),
+                   style="display:flex;justify-content:space-between;align-items:center;gap:12px;",
+               ),
+               ui.div({"class": "statline", "id": season_panel_id, "style": "display:grid;"}, *season_statline),
+               ui.div({"class": "statline", "id": eff_panel_id, "style": "display:none;"}, *efficiency_statline),
                ui.div("vs. League Average ",
                       ui.span(f"unweighted mean, all {division_label} players", class_="sub"),
                       class_="col-title"),
@@ -1626,6 +1685,8 @@ def make_sidebar(prefix, df, conferences):
     mid_ast_pct_min, mid_ast_pct_max = slider_range("mid_assisted_pct", 0.01) if "mid_assisted_pct" in df.columns else (0, 1)
     three_ast_pct_min, three_ast_pct_max = slider_range("three_assisted_pct", 0.01) if "three_assisted_pct" in df.columns else (0, 1)
     rpg_min, rpg_max = slider_range("rpg", 0.1)
+    tov_min, tov_max = slider_range("tov", 0.1)
+    pf_min, pf_max = slider_range("pf", 0.1) if "pf" in df.columns and pd.to_numeric(df["pf"], errors="coerce").notna().any() else (0, 1)
     drb_min, drb_max = slider_range("drb", 0.1)
     bpg_min, bpg_max = slider_range("bpg", 0.1)
     spg_min, spg_max = slider_range("spg", 0.1)
@@ -1850,6 +1911,15 @@ def make_sidebar(prefix, df, conferences):
                ui.input_slider(f"{prefix}_apg_range", None, min=apg_min, max=apg_max,
                                value=[apg_min, apg_max], step=0.1),
                class_="sb-section"),
+        ui.div(ui.div("TOV/G", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_tov_range", None, min=tov_min, max=tov_max,
+                               value=[tov_min, tov_max], step=0.1),
+               class_="sb-section"),
+        ui.div(ui.div("Fouls/G", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_pf_range", None, min=pf_min, max=pf_max,
+                               value=[pf_min, pf_max], step=0.1),
+               class_="sb-section")
+        if prefix == "d1" and "pf" in df.columns and pd.to_numeric(df["pf"], errors="coerce").notna().any() else ui.div(),
         bpm_filter,
         porpag_filter,
         ui.div(ui.div("AST/TOV ratio", class_="sb-section-head"),
@@ -2103,6 +2173,25 @@ app_ui = ui.page_fluid(
                 flex-shrink:0; transition:color .15s, transform .1s;
             }
             .star-btn:hover { transform:scale(1.2); }
+            .statline-toggle .pill-btn {
+                background:transparent;
+                color:var(--ink-3);
+                border:1px solid var(--rule);
+                border-radius:999px;
+                padding:6px 12px;
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                cursor:pointer;
+                transition:all .15s ease;
+            }
+            .statline-toggle .pill-btn.active {
+                color:var(--bg);
+                background:var(--accent);
+                border-color:var(--accent);
+            }
             .sample-badge {
                 display:inline-block;
                 margin-top:8px;
@@ -2842,6 +2931,8 @@ def server(input, output, session):
             is_full_range(input.d1_mpg(), "mpg", 0.1),
             is_full_range(input.d1_ppg_range(), "ppg", 0.1),
             is_full_range(input.d1_rpg_range(), "rpg", 0.1),
+            is_full_range(input.d1_tov_range(), "tov", 0.1),
+            is_full_range(input.d1_pf_range(), "pf", 0.1),
             is_full_range(input.d1_drb_range(), "drb", 0.1),
             is_full_range(input.d1_efg(), "efg", 0.01),
             is_full_range(input.d1_tp_range(), "tp", 0.01),
@@ -2905,6 +2996,8 @@ def server(input, output, session):
             is_full_range(input.d1_mpg(), "mpg", 0.1),
             is_full_range(input.d1_ppg_range(), "ppg", 0.1),
             is_full_range(input.d1_rpg_range(), "rpg", 0.1),
+            is_full_range(input.d1_tov_range(), "tov", 0.1),
+            is_full_range(input.d1_pf_range(), "pf", 0.1),
             is_full_range(input.d1_drb_range(), "drb", 0.1),
             is_full_range(input.d1_efg(), "efg", 0.01),
             is_full_range(input.d1_tp_range(), "tp", 0.01),
@@ -3156,6 +3249,8 @@ def server(input, output, session):
         d = apply_d1_range_filter(d, input.d1_mpg(), "mpg", 0.1)
         d = apply_d1_range_filter(d, input.d1_ppg_range(), "ppg", 0.1)
         d = apply_d1_range_filter(d, input.d1_rpg_range(), "rpg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_tov_range(), "tov", 0.1)
+        d = apply_d1_range_filter(d, input.d1_pf_range(), "pf", 0.1)
         d = apply_d1_range_filter(d, input.d1_drb_range(), "drb", 0.1)
         d = apply_d1_range_filter(d, input.d1_efg(), "efg", 0.01)
         d = apply_d1_range_filter(d, input.d1_tp_range(), "tp", 0.01)
@@ -3258,6 +3353,10 @@ def server(input, output, session):
                 apply_range_probe("ppg", "ppg", input.d1_ppg_range())
             if not zero_reason:
                 apply_range_probe("rpg", "rpg", input.d1_rpg_range())
+            if not zero_reason:
+                apply_range_probe("tov", "tov", input.d1_tov_range())
+            if not zero_reason:
+                apply_range_probe("pf", "pf", input.d1_pf_range())
             if not zero_reason:
                 apply_range_probe("drb", "drb", input.d1_drb_range())
             if not zero_reason:
@@ -3429,6 +3528,7 @@ def server(input, output, session):
         lo, hi = input.d2_mpg();         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
         lo, hi = input.d2_ppg_range();   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
         lo, hi = input.d2_rpg_range();   d = d[(d["rpg"]         >= lo) & (d["rpg"]         <= hi)]
+        lo, hi = input.d2_tov_range();   d = d[(d["tov"]         >= lo) & (d["tov"]         <= hi)]
         lo, hi = input.d2_drb_range();   d = d[(d["drb"]         >= lo) & (d["drb"]         <= hi)]
         lo, hi = input.d2_efg();         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
         lo, hi = input.d2_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
@@ -3586,6 +3686,7 @@ def server(input, output, session):
         lo, hi = input.d3_mpg();         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
         lo, hi = input.d3_ppg_range();   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
         lo, hi = input.d3_rpg_range();   d = d[(d["rpg"]         >= lo) & (d["rpg"]         <= hi)]
+        lo, hi = input.d3_tov_range();   d = d[(d["tov"]         >= lo) & (d["tov"]         <= hi)]
         lo, hi = input.d3_drb_range();   d = d[(d["drb"]         >= lo) & (d["drb"]         <= hi)]
         lo, hi = input.d3_efg();         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
         lo, hi = input.d3_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
