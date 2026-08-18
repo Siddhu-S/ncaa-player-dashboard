@@ -971,7 +971,6 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         stat_box("FG%", f"{row['fg']*100:.1f}", league_avg["fg"] * 100),
         stat_box("3P%", f"{row['tp']*100:.1f}", league_avg["tp"] * 100),
         stat_box("FT%", f"{row['ft']*100:.1f}", league_avg["ft"] * 100),
-        stat_box("USG%", f"{row['usg']*100:.1f}", league_avg["usg"] * 100),
     ]
     bpm_value = pd.to_numeric(pd.Series([row.get("bpm", np.nan)]), errors="coerce").iloc[0]
     porpag_value = pd.to_numeric(pd.Series([row.get("porpag", np.nan)]), errors="coerce").iloc[0]
@@ -990,8 +989,8 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
             ("STL%", row.get("stl_pct", np.nan), league_avg.get("stl_pct", 0), False),
             ("BLK%", row.get("blk_pct", np.nan), league_avg.get("blk_pct", 0), False),
             ("3P%", row.get("tp", np.nan), league_avg.get("tp", 0), True),
-            ("FT%", row.get("ft", np.nan), league_avg.get("ft", 0), True),
             ("USG%", row.get("usg", np.nan), league_avg.get("usg", 0), True),
+            ("FT%", row.get("ft", np.nan), league_avg.get("ft", 0), True),
             ("FTR", row.get("ftr", np.nan), league_avg.get("ftr", 0), False),
             ("TOV%", row.get("tov_pct", np.nan), league_avg.get("tov_pct", 0), False),
             ("PF/40", row.get("pf_per_40", np.nan), league_avg.get("pf_per_40", 0), False),
@@ -1190,6 +1189,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                )),
         ui.div({"class": "detail-col"},
                ui.div(
+                   {"class": "statline-header"},
                    ui.div("Season Statline ", ui.span("2025–26", class_="sub"), class_="col-title"),
                    ui.div(
                        {"class": "statline-toggle",
@@ -1216,9 +1216,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                                "this.classList.add('active');"
                            ),
                        ) if efficiency_statline else ui.div(),
-                       style="display:flex;gap:8px;align-items:center;",
-                   ),
-                   style="display:flex;justify-content:space-between;align-items:center;gap:12px;",
+                   ) if efficiency_statline else ui.div(),
                ),
                ui.div({"class": "statline", "id": season_panel_id, "style": "display:grid;"}, *season_statline),
                ui.div({"class": "statline", "id": eff_panel_id, "style": "display:none;"}, *efficiency_statline),
@@ -1672,7 +1670,17 @@ def make_sidebar(prefix, df, conferences):
     mpg_min, mpg_max = slider_range("mpg", 0.1)
     ppg_min, ppg_max = slider_range("ppg", 0.1)
     efg_min, efg_max = slider_range("efg", 0.01)
+    orb_pct_min, orb_pct_max = slider_range("orb_pct", 0.01) if "orb_pct" in df.columns and pd.to_numeric(df["orb_pct"], errors="coerce").notna().any() else (0, 1)
+    drb_pct_min, drb_pct_max = slider_range("drb_pct", 0.01) if "drb_pct" in df.columns and pd.to_numeric(df["drb_pct"], errors="coerce").notna().any() else (0, 1)
+    ast_pct_min, ast_pct_max = slider_range("ast_pct", 0.01) if "ast_pct" in df.columns and pd.to_numeric(df["ast_pct"], errors="coerce").notna().any() else (0, 1)
+    stl_pct_min, stl_pct_max = slider_range("stl_pct", 0.01) if "stl_pct" in df.columns and pd.to_numeric(df["stl_pct"], errors="coerce").notna().any() else (0, 1)
+    blk_pct_min, blk_pct_max = slider_range("blk_pct", 0.01) if "blk_pct" in df.columns and pd.to_numeric(df["blk_pct"], errors="coerce").notna().any() else (0, 1)
     tp_min, tp_max = slider_range("tp", 0.01)
+    ft_min, ft_max = slider_range("ft", 0.01) if "ft" in df.columns and pd.to_numeric(df["ft"], errors="coerce").notna().any() else (0, 1)
+    usg_min, usg_max = slider_range("usg", 0.01) if "usg" in df.columns and pd.to_numeric(df["usg"], errors="coerce").notna().any() else (0, 1)
+    ftr_min, ftr_max = slider_range("ftr", 0.01) if "ftr" in df.columns and pd.to_numeric(df["ftr"], errors="coerce").notna().any() else (0, 1)
+    tov_pct_min, tov_pct_max = slider_range("tov_pct", 0.01) if "tov_pct" in df.columns and pd.to_numeric(df["tov_pct"], errors="coerce").notna().any() else (0, 1)
+    pf40_min, pf40_max = slider_range("pf_per_40", 0.1) if "pf_per_40" in df.columns and pd.to_numeric(df["pf_per_40"], errors="coerce").notna().any() else (0, 1)
     three_share_min, three_share_max = slider_range("three_share", 0.01)
     rim_share_min, rim_share_max = slider_range("rim_share", 0.01) if "rim_share" in df.columns else (0, 1)
     mid_share_min, mid_share_max = slider_range("mid_share", 0.01) if "mid_share" in df.columns else (0, 1)
@@ -1898,10 +1906,60 @@ def make_sidebar(prefix, df, conferences):
                ui.input_slider(f"{prefix}_efg", None, min=efg_min, max=efg_max,
                                value=[efg_min, efg_max], step=0.01),
                class_="sb-section"),
+        ui.div(ui.div("ORB%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_orb_pct", None, min=orb_pct_min, max=orb_pct_max,
+                               value=[orb_pct_min, orb_pct_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "orb_pct" in df.columns and pd.to_numeric(df["orb_pct"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("DRB%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_drb_pct", None, min=drb_pct_min, max=drb_pct_max,
+                               value=[drb_pct_min, drb_pct_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "drb_pct" in df.columns and pd.to_numeric(df["drb_pct"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("AST%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_ast_pct", None, min=ast_pct_min, max=ast_pct_max,
+                               value=[ast_pct_min, ast_pct_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "ast_pct" in df.columns and pd.to_numeric(df["ast_pct"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("STL%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_stl_pct", None, min=stl_pct_min, max=stl_pct_max,
+                               value=[stl_pct_min, stl_pct_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "stl_pct" in df.columns and pd.to_numeric(df["stl_pct"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("BLK%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_blk_pct", None, min=blk_pct_min, max=blk_pct_max,
+                               value=[blk_pct_min, blk_pct_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "blk_pct" in df.columns and pd.to_numeric(df["blk_pct"], errors="coerce").notna().any() else ui.div(),
         ui.div(ui.div("3P%", class_="sb-section-head"),
                ui.input_slider(f"{prefix}_tp_range", None, min=tp_min, max=tp_max,
                                value=[tp_min, tp_max], step=0.01),
                class_="sb-section"),
+        ui.div(ui.div("FT%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_ft_range", None, min=ft_min, max=ft_max,
+                               value=[ft_min, ft_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "ft" in df.columns and pd.to_numeric(df["ft"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("USG%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_usg_range", None, min=usg_min, max=usg_max,
+                               value=[usg_min, usg_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "usg" in df.columns and pd.to_numeric(df["usg"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("FTR", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_ftr_range", None, min=ftr_min, max=ftr_max,
+                               value=[ftr_min, ftr_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "ftr" in df.columns and pd.to_numeric(df["ftr"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("TOV%", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_tov_pct_range", None, min=tov_pct_min, max=tov_pct_max,
+                               value=[tov_pct_min, tov_pct_max], step=0.01),
+               class_="sb-section")
+        if prefix == "d1" and "tov_pct" in df.columns and pd.to_numeric(df["tov_pct"], errors="coerce").notna().any() else ui.div(),
+        ui.div(ui.div("PF/40", class_="sb-section-head"),
+               ui.input_slider(f"{prefix}_pf40_range", None, min=pf40_min, max=pf40_max,
+                               value=[pf40_min, pf40_max], step=0.1),
+               class_="sb-section")
+        if prefix == "d1" and "pf_per_40" in df.columns and pd.to_numeric(df["pf_per_40"], errors="coerce").notna().any() else ui.div(),
         ui.div(ui.div("3P Share", class_="sb-section-head"),
                ui.input_slider(f"{prefix}_three_share", None, min=three_share_min, max=three_share_max,
                                value=[three_share_min, three_share_max], step=0.01),
@@ -2191,6 +2249,25 @@ app_ui = ui.page_fluid(
                 color:var(--bg);
                 background:var(--accent);
                 border-color:var(--accent);
+            }
+            .statline-header {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-end;
+                gap:12px;
+                border-bottom:1px solid var(--ink-2);
+                padding-bottom:10px;
+                margin-bottom:18px;
+            }
+            .statline-header .col-title {
+                border-bottom:none;
+                padding-bottom:0;
+                margin-bottom:0;
+            }
+            .statline-header .statline-toggle {
+                display:flex;
+                gap:8px;
+                align-items:center;
             }
             .sample-badge {
                 display:inline-block;
@@ -2935,7 +3012,17 @@ def server(input, output, session):
             is_full_range(input.d1_pf_range(), "pf", 0.1),
             is_full_range(input.d1_drb_range(), "drb", 0.1),
             is_full_range(input.d1_efg(), "efg", 0.01),
+            is_full_range(input.d1_orb_pct(), "orb_pct", 0.01),
+            is_full_range(input.d1_drb_pct(), "drb_pct", 0.01),
+            is_full_range(input.d1_ast_pct(), "ast_pct", 0.01),
+            is_full_range(input.d1_stl_pct(), "stl_pct", 0.01),
+            is_full_range(input.d1_blk_pct(), "blk_pct", 0.01),
             is_full_range(input.d1_tp_range(), "tp", 0.01),
+            is_full_range(input.d1_ft_range(), "ft", 0.01),
+            is_full_range(input.d1_usg_range(), "usg", 0.01),
+            is_full_range(input.d1_ftr_range(), "ftr", 0.01),
+            is_full_range(input.d1_tov_pct_range(), "tov_pct", 0.01),
+            is_full_range(input.d1_pf40_range(), "pf_per_40", 0.1),
             is_full_range(input.d1_three_share(), "three_share", 0.01),
             is_full_range(input.d1_rim_share(), "rim_share", 0.01),
             is_full_range(input.d1_mid_share(), "mid_share", 0.01),
@@ -3000,7 +3087,17 @@ def server(input, output, session):
             is_full_range(input.d1_pf_range(), "pf", 0.1),
             is_full_range(input.d1_drb_range(), "drb", 0.1),
             is_full_range(input.d1_efg(), "efg", 0.01),
+            is_full_range(input.d1_orb_pct(), "orb_pct", 0.01),
+            is_full_range(input.d1_drb_pct(), "drb_pct", 0.01),
+            is_full_range(input.d1_ast_pct(), "ast_pct", 0.01),
+            is_full_range(input.d1_stl_pct(), "stl_pct", 0.01),
+            is_full_range(input.d1_blk_pct(), "blk_pct", 0.01),
             is_full_range(input.d1_tp_range(), "tp", 0.01),
+            is_full_range(input.d1_ft_range(), "ft", 0.01),
+            is_full_range(input.d1_usg_range(), "usg", 0.01),
+            is_full_range(input.d1_ftr_range(), "ftr", 0.01),
+            is_full_range(input.d1_tov_pct_range(), "tov_pct", 0.01),
+            is_full_range(input.d1_pf40_range(), "pf_per_40", 0.1),
             is_full_range(input.d1_three_share(), "three_share", 0.01),
             is_full_range(input.d1_rim_share(), "rim_share", 0.01),
             is_full_range(input.d1_mid_share(), "mid_share", 0.01),
@@ -3253,7 +3350,17 @@ def server(input, output, session):
         d = apply_d1_range_filter(d, input.d1_pf_range(), "pf", 0.1)
         d = apply_d1_range_filter(d, input.d1_drb_range(), "drb", 0.1)
         d = apply_d1_range_filter(d, input.d1_efg(), "efg", 0.01)
+        d = apply_d1_range_filter(d, input.d1_orb_pct(), "orb_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_drb_pct(), "drb_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_ast_pct(), "ast_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_stl_pct(), "stl_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_blk_pct(), "blk_pct", 0.01)
         d = apply_d1_range_filter(d, input.d1_tp_range(), "tp", 0.01)
+        d = apply_d1_range_filter(d, input.d1_ft_range(), "ft", 0.01)
+        d = apply_d1_range_filter(d, input.d1_usg_range(), "usg", 0.01)
+        d = apply_d1_range_filter(d, input.d1_ftr_range(), "ftr", 0.01)
+        d = apply_d1_range_filter(d, input.d1_tov_pct_range(), "tov_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_pf40_range(), "pf_per_40", 0.1)
         d = apply_d1_range_filter(d, input.d1_three_share(), "three_share", 0.01)
         d = apply_d1_range_filter(d, input.d1_rim_share(), "rim_share", 0.01)
         d = apply_d1_range_filter(d, input.d1_mid_share(), "mid_share", 0.01)
@@ -3362,7 +3469,27 @@ def server(input, output, session):
             if not zero_reason:
                 apply_range_probe("efg", "efg", input.d1_efg())
             if not zero_reason:
+                apply_range_probe("orb_pct", "orb_pct", input.d1_orb_pct())
+            if not zero_reason:
+                apply_range_probe("drb_pct", "drb_pct", input.d1_drb_pct())
+            if not zero_reason:
+                apply_range_probe("ast_pct", "ast_pct", input.d1_ast_pct())
+            if not zero_reason:
+                apply_range_probe("stl_pct", "stl_pct", input.d1_stl_pct())
+            if not zero_reason:
+                apply_range_probe("blk_pct", "blk_pct", input.d1_blk_pct())
+            if not zero_reason:
                 apply_range_probe("tp", "tp", input.d1_tp_range())
+            if not zero_reason:
+                apply_range_probe("ft", "ft", input.d1_ft_range())
+            if not zero_reason:
+                apply_range_probe("usg", "usg", input.d1_usg_range())
+            if not zero_reason:
+                apply_range_probe("ftr", "ftr", input.d1_ftr_range())
+            if not zero_reason:
+                apply_range_probe("tov_pct", "tov_pct", input.d1_tov_pct_range())
+            if not zero_reason:
+                apply_range_probe("pf_per_40", "pf_per_40", input.d1_pf40_range())
             if not zero_reason:
                 apply_range_probe("three_share", "three_share", input.d1_three_share())
             if not zero_reason:
