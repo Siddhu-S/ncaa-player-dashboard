@@ -977,6 +977,8 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         statline.append(stat_box("BPM", f"{bpm_value:.1f}", 0))
     if pd.notna(porpag_value):
         statline.append(stat_box("PORPAG", f"{porpag_value:.2f}", 0))
+    if pd.notna(assisted_fg_pct):
+        statline.append(stat_box("AST'D FG%", f"{assisted_fg_pct*100:.1f}", 0))
     bar_defs = [
         ("PPG", row["ppg"], league_avg["ppg"], ppg_max, None),
         ("RPG", row["rpg"], league_avg["rpg"], 14,      None),
@@ -1065,7 +1067,6 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     ]
 
     shot_profile_summary = [
-        ("Overall Assisted", assisted_fg_pct, "All made field goals"),
         ("Rim Assisted", rim_assisted_pct, f"{pct_display(rim_fgm_share)} of FGM"),
         ("Mid Assisted", mid_assisted_pct, f"{pct_display(mid_fgm_share)} of FGM"),
         ("3PT Assisted", three_assisted_pct, f"{pct_display(three_fgm_share)} of FGM"),
