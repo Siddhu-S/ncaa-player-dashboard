@@ -2742,6 +2742,13 @@ def server(input, output, session):
             float(input.d1_score_v2_min() or 0) == 0.0,
         ])
 
+    def apply_d1_range_filter(df, current, column, step):
+        lo, hi = safe_range_input(current, d1_df, column, step)
+        default_lo, default_hi = default_slider_range(d1_df, column, step)
+        if abs(float(lo) - default_lo) < 1e-9 and abs(float(hi) - default_hi) < 1e-9:
+            return df
+        return df[(df[column] >= lo) & (df[column] <= hi)]
+
     def sync_scatter(fig, plot_df, selected_id, dimmed_arch, click_handler):
         compress_pc1_tail = fig is d2_fig
         compress_pc2_tail = fig is d2_fig
@@ -2950,33 +2957,33 @@ def server(input, output, session):
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d1_classes() or [])
         if cs: d = d[d["cls"].isin(cs)]
-        lo, hi = safe_range_input(input.d1_eligibility(), d1_df, "eligibility", 1); d = d[(d["eligibility"] >= lo) & (d["eligibility"] <= hi)]
+        d = apply_d1_range_filter(d, input.d1_eligibility(), "eligibility", 1)
         xs = list(input.d1_confs() or [])
         if xs: d = d[d["conf"].isin(xs)]
         teams = list(input.d1_team() or [])
         if teams: d = d[d["team"].isin(teams)]
-        lo, hi = safe_range_input(input.d1_mpg(), d1_df, "mpg", 0.1);         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_ppg_range(), d1_df, "ppg", 0.1);   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_rpg_range(), d1_df, "rpg", 0.1);   d = d[(d["rpg"]         >= lo) & (d["rpg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_drb_range(), d1_df, "drb", 0.1);   d = d[(d["drb"]         >= lo) & (d["drb"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_efg(), d1_df, "efg", 0.01);         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_tp_range(), d1_df, "tp", 0.01);    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
-        lo, hi = safe_range_input(input.d1_three_share(), d1_df, "three_share", 0.01); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
-        lo, hi = safe_range_input(input.d1_rim_share(), d1_df, "rim_share", 0.01);   d = d[(d["rim_share"]    >= lo) & (d["rim_share"]    <= hi)]
-        lo, hi = safe_range_input(input.d1_mid_share(), d1_df, "mid_share", 0.01);   d = d[(d["mid_share"]    >= lo) & (d["mid_share"]    <= hi)]
-        lo, hi = safe_range_input(input.d1_assisted_fg_pct(), d1_df, "assisted_fg_pct", 0.01); d = d[(d["assisted_fg_pct"] >= lo) & (d["assisted_fg_pct"] <= hi)]
-        lo, hi = safe_range_input(input.d1_rim_fg_pct(), d1_df, "rim_fg_pct", 0.01);  d = d[(d["rim_fg_pct"]   >= lo) & (d["rim_fg_pct"]   <= hi)]
-        lo, hi = safe_range_input(input.d1_mid_fg_pct(), d1_df, "mid_fg_pct", 0.01);  d = d[(d["mid_fg_pct"]   >= lo) & (d["mid_fg_pct"]   <= hi)]
-        lo, hi = safe_range_input(input.d1_rim_assisted_pct(), d1_df, "rim_assisted_pct", 0.01); d = d[(d["rim_assisted_pct"] >= lo) & (d["rim_assisted_pct"] <= hi)]
-        lo, hi = safe_range_input(input.d1_mid_assisted_pct(), d1_df, "mid_assisted_pct", 0.01); d = d[(d["mid_assisted_pct"] >= lo) & (d["mid_assisted_pct"] <= hi)]
-        lo, hi = safe_range_input(input.d1_three_assisted_pct(), d1_df, "three_assisted_pct", 0.01); d = d[(d["three_assisted_pct"] >= lo) & (d["three_assisted_pct"] <= hi)]
-        lo, hi = safe_range_input(input.d1_apg_range(), d1_df, "apg", 0.1);   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_bpm(), d1_df, "bpm", 0.1);         d = d[(d["bpm"]         >= lo) & (d["bpm"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_porpag(), d1_df, "porpag", 0.1);      d = d[(d["porpag"]      >= lo) & (d["porpag"]      <= hi)]
-        lo, hi = safe_range_input(input.d1_spg_range(), d1_df, "spg", 0.1);   d = d[(d["spg"]         >= lo) & (d["spg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_bpg_range(), d1_df, "bpg", 0.1);   d = d[(d["bpg"]         >= lo) & (d["bpg"]         <= hi)]
-        lo, hi = safe_range_input(input.d1_ast_tov(), d1_df, "ast_tov", 0.1);     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
-        lo, hi = safe_range_input(input.d1_height(), d1_df, "heightIn", 1);      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
+        d = apply_d1_range_filter(d, input.d1_mpg(), "mpg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_ppg_range(), "ppg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_rpg_range(), "rpg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_drb_range(), "drb", 0.1)
+        d = apply_d1_range_filter(d, input.d1_efg(), "efg", 0.01)
+        d = apply_d1_range_filter(d, input.d1_tp_range(), "tp", 0.01)
+        d = apply_d1_range_filter(d, input.d1_three_share(), "three_share", 0.01)
+        d = apply_d1_range_filter(d, input.d1_rim_share(), "rim_share", 0.01)
+        d = apply_d1_range_filter(d, input.d1_mid_share(), "mid_share", 0.01)
+        d = apply_d1_range_filter(d, input.d1_assisted_fg_pct(), "assisted_fg_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_rim_fg_pct(), "rim_fg_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_mid_fg_pct(), "mid_fg_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_rim_assisted_pct(), "rim_assisted_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_mid_assisted_pct(), "mid_assisted_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_three_assisted_pct(), "three_assisted_pct", 0.01)
+        d = apply_d1_range_filter(d, input.d1_apg_range(), "apg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_bpm(), "bpm", 0.1)
+        d = apply_d1_range_filter(d, input.d1_porpag(), "porpag", 0.1)
+        d = apply_d1_range_filter(d, input.d1_spg_range(), "spg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_bpg_range(), "bpg", 0.1)
+        d = apply_d1_range_filter(d, input.d1_ast_tov(), "ast_tov", 0.1)
+        d = apply_d1_range_filter(d, input.d1_height(), "heightIn", 1)
         if d.empty and d1_filters_are_default():
             return d1_df.copy()
         return d
