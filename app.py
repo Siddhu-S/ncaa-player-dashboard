@@ -2596,6 +2596,26 @@ def server(input, output, session):
         decimals = len(str(step).split(".")[1].rstrip("0"))
         return (round(lo, decimals), round(hi, decimals))
 
+    def safe_range_input(current, df, column, step):
+        default_lo, default_hi = default_slider_range(df, column, step)
+        if not isinstance(current, (list, tuple)) or len(current) != 2:
+            return (default_lo, default_hi)
+        try:
+            cur_lo = float(current[0])
+            cur_hi = float(current[1])
+        except (TypeError, ValueError):
+            return (default_lo, default_hi)
+        if not np.isfinite(cur_lo) or not np.isfinite(cur_hi) or cur_hi < cur_lo:
+            return (default_lo, default_hi)
+        # Shinylive sometimes hydrates range sliders to a collapsed zero range on first load.
+        if (
+            cur_lo == 0.0
+            and cur_hi == 0.0
+            and (default_lo != 0 or default_hi != 0)
+        ):
+            return (default_lo, default_hi)
+        return (cur_lo, cur_hi)
+
     def d1_home_view_active():
         q = (input.d1_q() or "").strip()
         qual_mode = input.d1_qualification_filter() or "none"
@@ -2627,7 +2647,7 @@ def server(input, output, session):
 
         def is_full_range(current, column, step):
             lo, hi = default_slider_range(d1_df, column, step)
-            cur_lo, cur_hi = current
+            cur_lo, cur_hi = safe_range_input(current, d1_df, column, step)
             return abs(float(cur_lo) - lo) < 1e-9 and abs(float(cur_hi) - hi) < 1e-9
 
         return all([
@@ -2653,7 +2673,7 @@ def server(input, output, session):
             is_full_range(input.d1_bpg_range(), "bpg", 0.1),
             is_full_range(input.d1_ast_tov(), "ast_tov", 0.1),
             is_full_range(input.d1_height(), "heightIn", 1),
-            tuple(input.d1_eligibility()) == (
+            tuple(safe_range_input(input.d1_eligibility(), d1_df, "eligibility", 1)) == (
                 *default_slider_range(d1_df, "eligibility", 1),
             ),
             float(input.d1_score_min() or 0) == 0.0,
@@ -2868,33 +2888,33 @@ def server(input, output, session):
         if ps: d = d[d["pos"].isin(ps)]
         cs = list(input.d1_classes() or [])
         if cs: d = d[d["cls"].isin(cs)]
-        lo, hi = input.d1_eligibility(); d = d[(d["eligibility"] >= lo) & (d["eligibility"] <= hi)]
+        lo, hi = safe_range_input(input.d1_eligibility(), d1_df, "eligibility", 1); d = d[(d["eligibility"] >= lo) & (d["eligibility"] <= hi)]
         xs = list(input.d1_confs() or [])
         if xs: d = d[d["conf"].isin(xs)]
         teams = list(input.d1_team() or [])
         if teams: d = d[d["team"].isin(teams)]
-        lo, hi = input.d1_mpg();         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
-        lo, hi = input.d1_ppg_range();   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
-        lo, hi = input.d1_rpg_range();   d = d[(d["rpg"]         >= lo) & (d["rpg"]         <= hi)]
-        lo, hi = input.d1_drb_range();   d = d[(d["drb"]         >= lo) & (d["drb"]         <= hi)]
-        lo, hi = input.d1_efg();         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
-        lo, hi = input.d1_tp_range();    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
-        lo, hi = input.d1_three_share(); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
-        lo, hi = input.d1_rim_share();   d = d[(d["rim_share"]    >= lo) & (d["rim_share"]    <= hi)]
-        lo, hi = input.d1_mid_share();   d = d[(d["mid_share"]    >= lo) & (d["mid_share"]    <= hi)]
-        lo, hi = input.d1_assisted_fg_pct(); d = d[(d["assisted_fg_pct"] >= lo) & (d["assisted_fg_pct"] <= hi)]
-        lo, hi = input.d1_rim_fg_pct();  d = d[(d["rim_fg_pct"]   >= lo) & (d["rim_fg_pct"]   <= hi)]
-        lo, hi = input.d1_mid_fg_pct();  d = d[(d["mid_fg_pct"]   >= lo) & (d["mid_fg_pct"]   <= hi)]
-        lo, hi = input.d1_rim_assisted_pct(); d = d[(d["rim_assisted_pct"] >= lo) & (d["rim_assisted_pct"] <= hi)]
-        lo, hi = input.d1_mid_assisted_pct(); d = d[(d["mid_assisted_pct"] >= lo) & (d["mid_assisted_pct"] <= hi)]
-        lo, hi = input.d1_three_assisted_pct(); d = d[(d["three_assisted_pct"] >= lo) & (d["three_assisted_pct"] <= hi)]
-        lo, hi = input.d1_apg_range();   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
-        lo, hi = input.d1_bpm();         d = d[(d["bpm"]         >= lo) & (d["bpm"]         <= hi)]
-        lo, hi = input.d1_porpag();      d = d[(d["porpag"]      >= lo) & (d["porpag"]      <= hi)]
-        lo, hi = input.d1_spg_range();   d = d[(d["spg"]         >= lo) & (d["spg"]         <= hi)]
-        lo, hi = input.d1_bpg_range();   d = d[(d["bpg"]         >= lo) & (d["bpg"]         <= hi)]
-        lo, hi = input.d1_ast_tov();     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
-        lo, hi = input.d1_height();      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
+        lo, hi = safe_range_input(input.d1_mpg(), d1_df, "mpg", 0.1);         d = d[(d["mpg"]         >= lo) & (d["mpg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_ppg_range(), d1_df, "ppg", 0.1);   d = d[(d["ppg"]         >= lo) & (d["ppg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_rpg_range(), d1_df, "rpg", 0.1);   d = d[(d["rpg"]         >= lo) & (d["rpg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_drb_range(), d1_df, "drb", 0.1);   d = d[(d["drb"]         >= lo) & (d["drb"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_efg(), d1_df, "efg", 0.01);         d = d[(d["efg"]         >= lo) & (d["efg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_tp_range(), d1_df, "tp", 0.01);    d = d[(d["tp"]          >= lo) & (d["tp"]          <= hi)]
+        lo, hi = safe_range_input(input.d1_three_share(), d1_df, "three_share", 0.01); d = d[(d["three_share"]  >= lo) & (d["three_share"]  <= hi)]
+        lo, hi = safe_range_input(input.d1_rim_share(), d1_df, "rim_share", 0.01);   d = d[(d["rim_share"]    >= lo) & (d["rim_share"]    <= hi)]
+        lo, hi = safe_range_input(input.d1_mid_share(), d1_df, "mid_share", 0.01);   d = d[(d["mid_share"]    >= lo) & (d["mid_share"]    <= hi)]
+        lo, hi = safe_range_input(input.d1_assisted_fg_pct(), d1_df, "assisted_fg_pct", 0.01); d = d[(d["assisted_fg_pct"] >= lo) & (d["assisted_fg_pct"] <= hi)]
+        lo, hi = safe_range_input(input.d1_rim_fg_pct(), d1_df, "rim_fg_pct", 0.01);  d = d[(d["rim_fg_pct"]   >= lo) & (d["rim_fg_pct"]   <= hi)]
+        lo, hi = safe_range_input(input.d1_mid_fg_pct(), d1_df, "mid_fg_pct", 0.01);  d = d[(d["mid_fg_pct"]   >= lo) & (d["mid_fg_pct"]   <= hi)]
+        lo, hi = safe_range_input(input.d1_rim_assisted_pct(), d1_df, "rim_assisted_pct", 0.01); d = d[(d["rim_assisted_pct"] >= lo) & (d["rim_assisted_pct"] <= hi)]
+        lo, hi = safe_range_input(input.d1_mid_assisted_pct(), d1_df, "mid_assisted_pct", 0.01); d = d[(d["mid_assisted_pct"] >= lo) & (d["mid_assisted_pct"] <= hi)]
+        lo, hi = safe_range_input(input.d1_three_assisted_pct(), d1_df, "three_assisted_pct", 0.01); d = d[(d["three_assisted_pct"] >= lo) & (d["three_assisted_pct"] <= hi)]
+        lo, hi = safe_range_input(input.d1_apg_range(), d1_df, "apg", 0.1);   d = d[(d["apg"]         >= lo) & (d["apg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_bpm(), d1_df, "bpm", 0.1);         d = d[(d["bpm"]         >= lo) & (d["bpm"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_porpag(), d1_df, "porpag", 0.1);      d = d[(d["porpag"]      >= lo) & (d["porpag"]      <= hi)]
+        lo, hi = safe_range_input(input.d1_spg_range(), d1_df, "spg", 0.1);   d = d[(d["spg"]         >= lo) & (d["spg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_bpg_range(), d1_df, "bpg", 0.1);   d = d[(d["bpg"]         >= lo) & (d["bpg"]         <= hi)]
+        lo, hi = safe_range_input(input.d1_ast_tov(), d1_df, "ast_tov", 0.1);     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
+        lo, hi = safe_range_input(input.d1_height(), d1_df, "heightIn", 1);      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
         return d
 
     @reactive.calc
