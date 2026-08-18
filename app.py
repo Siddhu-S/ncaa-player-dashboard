@@ -440,15 +440,17 @@ def make_shot_profile_pie_html(row, player_id):
 
     rim_segment = next((segment for segment in segments if segment["label"] == "RIM"), None)
     start_angle = -(rim_segment["share_pct"] / 100) * 180 if rim_segment else 0
+    default_readout = "Hover a slice for shot details."
     svg_parts = [
         '<div class="shot-pie-wrap" '
-        'style="position:relative;width:100%;height:100%;min-height:220px;">',
-        '<div class="shot-pie-tooltip" '
-        'style="display:none;position:absolute;left:0;top:0;transform:translate(-50%,-115%);'
-        'background:#2f281d;color:#f3ead7;padding:6px 10px;border-radius:10px;'
-        'font-family:var(--sans);font-size:11px;line-height:1.35;white-space:nowrap;'
-        'pointer-events:none;z-index:5;box-shadow:0 8px 24px rgba(0,0,0,.28);"></div>',
+        'style="display:flex;flex-direction:column;gap:10px;width:100%;height:100%;min-height:220px;">',
+        '<div class="shot-pie-readout" '
+        'style="min-height:34px;background:#2f281d;color:#f3ead7;padding:8px 12px;border-radius:10px;'
+        'font-family:var(--sans);font-size:11px;line-height:1.35;display:flex;align-items:center;'
+        'justify-content:center;text-align:center;">'
+        f'{html.escape(default_readout)}</div>',
         f'<svg viewBox="0 0 {size_w} {size_h}" width="100%" height="100%" '
+        'style="flex:1 1 auto;min-height:0;" '
         'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shot profile pie chart">'
     ]
 
@@ -470,16 +472,11 @@ def make_shot_profile_pie_html(row, player_id):
             f'<path d="{path}" fill="{shot_slice_color(fg_pct)}" stroke="#f4ead4" stroke-width="2" '
             f'data-tip="{hover_attr}" '
             'onmousemove="const wrap=this.closest(\'.shot-pie-wrap\');'
-            'const tip=wrap&&wrap.querySelector(\'.shot-pie-tooltip\');'
-            'if(!tip){return;}'
-            'const rect=wrap.getBoundingClientRect();'
-            'tip.textContent=this.dataset.tip;'
-            'tip.style.display=\'block\';'
-            'tip.style.left=(event.clientX-rect.left)+\'px\';'
-            'tip.style.top=(event.clientY-rect.top)+\'px\';" '
+            'const readout=wrap&&wrap.querySelector(\'.shot-pie-readout\');'
+            'if(readout){readout.textContent=this.dataset.tip;}" '
             'onmouseleave="const wrap=this.closest(\'.shot-pie-wrap\');'
-            'const tip=wrap&&wrap.querySelector(\'.shot-pie-tooltip\');'
-            'if(tip){tip.style.display=\'none\';}">'
+            'const readout=wrap&&wrap.querySelector(\'.shot-pie-readout\');'
+            f'if(readout){{readout.textContent=\'{html.escape(default_readout, quote=True)}\';}}">'
             f"<title>{html.escape(hover)}</title>"
             "</path>"
         )
