@@ -7,6 +7,7 @@ import numpy as np
 from pathlib import Path
 import html
 import json
+import math
 import re
 
 from data_engine import (
@@ -414,48 +415,69 @@ def make_shot_profile_pie_html(row, player_id):
     ]
     # Center the rim slice at the top, then place 3PT on the lower right and MID on the lower left.
     rotation = 90 + shares[0] * 180
-    fig = go.Figure(
-        go.Pie(
-            labels=labels,
-            values=shares,
-            sort=False,
-            direction="clockwise",
-            rotation=rotation,
-            textinfo="label",
-            textposition="auto",
-            textfont=dict(size=14, color="#ffffff", family="Inter, sans-serif"),
-            marker=dict(
-                colors=["#d7a538", "#ca9732", "#c18d29"],
-                line=dict(color="#f4ead4", width=2),
-            ),
-            hovertext=hover_text,
-            hovertemplate="%{hovertext}<extra></extra>",
-            showlegend=False,
-            hole=0,
+    colors = ["#d7a538", "#ca9732", "#c18d29"]
+    size = 220
+    cx = cy = size / 2
+    radius = 92
+
+    def polar(angle_deg, r):
+        angle = math.radians(angle_deg - 90)
+        return cx + r * math.cos(angle), cy + r * math.sin(angle)
+
+    def slice_path(start_deg, end_deg):
+        start_x, start_y = polar(start_deg, radius)
+        end_x, end_y = polar(end_deg, radius)
+        large_arc = 1 if (end_deg - start_deg) > 180 else 0
+        return (
+            f"M {cx:.2f} {cy:.2f} "
+            f"L {start_x:.2f} {start_y:.2f} "
+            f"A {radius:.2f} {radius:.2f} 0 {large_arc} 1 {end_x:.2f} {end_y:.2f} Z"
         )
-    )
-    fig.update_layout(
-        margin=dict(l=8, r=8, t=8, b=8),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        width=220,
-        height=220,
-        hoverlabel=dict(
-            bgcolor="#c89a33",
-            bordercolor="#f4ead4",
-            font=dict(family="Inter, sans-serif", size=10, color="#24324a"),
-            align="left",
-        ),
-        font=dict(color="#dbe6f4"),
-    )
-    return ui.HTML(
-        fig.to_html(
-            full_html=False,
-            include_plotlyjs=False,
-            config={"displayModeBar": False, "responsive": True},
-            div_id=f"shot-profile-{re.sub(r'[^a-zA-Z0-9_-]+', '-', str(player_id))}",
+
+    start_angle = rotation - 90
+    svg_parts = [
+        f'<svg viewBox="0 0 {size} {size}" width="{size}" height="{size}" '
+        'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shot profile pie chart">'
+    ]
+
+    current_angle = start_angle
+    for label, share, color, hover in zip(labels, shares, colors, hover_text):
+        sweep = share * 360
+        end_angle = current_angle + sweep
+        path = slice_path(current_angle, end_angle)
+        svg_parts.append(
+            f'<path d="{path}" fill="{color}" stroke="#f4ead4" stroke-width="2">'
+            f"<title>{html.escape(hover.replace('<br>', ' · '))}</title>"
+            "</path>"
         )
-    )
+
+        mid_angle = current_angle + sweep / 2
+        if share >= 0.12:
+            tx, ty = polar(mid_angle, radius * 0.55)
+            svg_parts.append(
+                f'<text x="{tx:.2f}" y="{ty:.2f}" fill="#ffffff" font-size="13" '
+                'font-family="Inter, sans-serif" font-weight="700" '
+                'text-anchor="middle" dominant-baseline="middle">'
+                f"{html.escape(label)}</text>"
+            )
+        else:
+            inner_x, inner_y = polar(mid_angle, radius * 0.82)
+            line_x, line_y = polar(mid_angle, radius * 1.02)
+            text_x, text_y = polar(mid_angle, radius * 1.18)
+            anchor = "start" if text_x >= cx else "end"
+            svg_parts.append(
+                f'<path d="M {inner_x:.2f} {inner_y:.2f} L {line_x:.2f} {line_y:.2f}" '
+                'stroke="#f4ead4" stroke-width="1.5" fill="none" />'
+            )
+            svg_parts.append(
+                f'<text x="{text_x:.2f}" y="{text_y:.2f}" fill="#ffffff" font-size="12" '
+                'font-family="Inter, sans-serif" font-weight="700" '
+                f'text-anchor="{anchor}" dominant-baseline="middle">{html.escape(label)}</text>'
+            )
+        current_angle = end_angle
+
+    svg_parts.append("</svg>")
+    return ui.HTML("".join(svg_parts))
 
 
 add_archetype_v2_columns(d1_df)
