@@ -2680,6 +2680,68 @@ def server(input, output, session):
             float(input.d1_score_v2_min() or 0) == 0.0,
         ])
 
+    def d1_filters_are_default():
+        q = (input.d1_q() or "").strip()
+        qual_mode = input.d1_qualification_filter() or "none"
+        transfer_tags = list(input.d1_transfer_tags() or [])
+        recruiting_tag = input.d1_recruiting_tag() or "none"
+        archetypes = list(input.d1_archetypes() or [])
+        archetypes_v2 = list(input.d1_archetypes_v2() or [])
+        positions = list(input.d1_positions() or [])
+        classes = list(input.d1_classes() or [])
+        confs = list(input.d1_confs() or [])
+        teams = list(input.d1_team() or [])
+
+        if any([
+            q,
+            qual_mode != "none",
+            transfer_tags,
+            recruiting_tag != "none",
+            archetypes,
+            archetypes_v2,
+            positions,
+            classes,
+            confs,
+            teams,
+            bool(input.d1_exclude_low_sample()),
+        ]):
+            return False
+
+        def is_full_range(current, column, step):
+            lo, hi = default_slider_range(d1_df, column, step)
+            cur_lo, cur_hi = safe_range_input(current, d1_df, column, step)
+            return abs(float(cur_lo) - lo) < 1e-9 and abs(float(cur_hi) - hi) < 1e-9
+
+        return all([
+            is_full_range(input.d1_mpg(), "mpg", 0.1),
+            is_full_range(input.d1_ppg_range(), "ppg", 0.1),
+            is_full_range(input.d1_rpg_range(), "rpg", 0.1),
+            is_full_range(input.d1_drb_range(), "drb", 0.1),
+            is_full_range(input.d1_efg(), "efg", 0.01),
+            is_full_range(input.d1_tp_range(), "tp", 0.01),
+            is_full_range(input.d1_three_share(), "three_share", 0.01),
+            is_full_range(input.d1_rim_share(), "rim_share", 0.01),
+            is_full_range(input.d1_mid_share(), "mid_share", 0.01),
+            is_full_range(input.d1_assisted_fg_pct(), "assisted_fg_pct", 0.01),
+            is_full_range(input.d1_rim_fg_pct(), "rim_fg_pct", 0.01),
+            is_full_range(input.d1_mid_fg_pct(), "mid_fg_pct", 0.01),
+            is_full_range(input.d1_rim_assisted_pct(), "rim_assisted_pct", 0.01),
+            is_full_range(input.d1_mid_assisted_pct(), "mid_assisted_pct", 0.01),
+            is_full_range(input.d1_three_assisted_pct(), "three_assisted_pct", 0.01),
+            is_full_range(input.d1_apg_range(), "apg", 0.1),
+            is_full_range(input.d1_bpm(), "bpm", 0.1),
+            is_full_range(input.d1_porpag(), "porpag", 0.1),
+            is_full_range(input.d1_spg_range(), "spg", 0.1),
+            is_full_range(input.d1_bpg_range(), "bpg", 0.1),
+            is_full_range(input.d1_ast_tov(), "ast_tov", 0.1),
+            is_full_range(input.d1_height(), "heightIn", 1),
+            tuple(safe_range_input(input.d1_eligibility(), d1_df, "eligibility", 1)) == (
+                *default_slider_range(d1_df, "eligibility", 1),
+            ),
+            float(input.d1_score_min() or 0) == 0.0,
+            float(input.d1_score_v2_min() or 0) == 0.0,
+        ])
+
     def sync_scatter(fig, plot_df, selected_id, dimmed_arch, click_handler):
         compress_pc1_tail = fig is d2_fig
         compress_pc2_tail = fig is d2_fig
@@ -2915,6 +2977,8 @@ def server(input, output, session):
         lo, hi = safe_range_input(input.d1_bpg_range(), d1_df, "bpg", 0.1);   d = d[(d["bpg"]         >= lo) & (d["bpg"]         <= hi)]
         lo, hi = safe_range_input(input.d1_ast_tov(), d1_df, "ast_tov", 0.1);     d = d[(d["ast_tov"]     >= lo) & (d["ast_tov"]     <= hi)]
         lo, hi = safe_range_input(input.d1_height(), d1_df, "heightIn", 1);      d = d[(d["heightIn"]    >= lo) & (d["heightIn"]    <= hi)]
+        if d.empty and d1_filters_are_default():
+            return d1_df.copy()
         return d
 
     @reactive.calc
