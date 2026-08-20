@@ -1,0 +1,24 @@
+name: Update UCSD lineup model data
+
+on:
+  schedule:
+    - cron: "50 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-ucsd-lineup-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas numpy
+      - run: python scripts/build_ucsd_lineup_model.py
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update UCSD lineup model data"
+          file_pattern: www/ucsd_model_data.json
