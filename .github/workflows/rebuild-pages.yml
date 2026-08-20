@@ -1,0 +1,43 @@
+name: Rebuild GitHub Pages (shinylive export)
+
+# The public site is a static shinylive export of this app living in docs/,
+# not app.py served live. Pushing app.py/data/www changes alone does not
+# update the public page -- docs/ has to be regenerated. This workflow does
+# that automatically after every push to main (and after the scheduled data
+# refresh workflows commit their cache updates to main).
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install shinylive
+      - id: shinylive-version
+        run: echo "version=$(shinylive --version)" >> "$GITHUB_OUTPUT"
+      # shinylive export downloads a ~400MB base-assets tarball on a cache
+      # miss; cache it keyed by shinylive's own version so an upgrade busts it.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/shinylive
+          key: shinylive-assets-${{ steps.shinylive-version.outputs.version }}
+      # docs/ must not exist when exporting from "." -- shinylive export
+      # otherwise recurses into the previous docs/ output and bundles it
+      # inside the new app.json, bloating it further on every run.
+      - run: rm -rf docs
+      - run: shinylive export . docs
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Rebuild GitHub Pages (shinylive export)"
+          file_pattern: docs/**
