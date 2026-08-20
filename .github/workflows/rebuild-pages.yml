@@ -37,6 +37,7 @@ jobs:
       # inside the new app.json, bloating it further on every run.
       - run: rm -rf docs
       - run: shinylive export . docs
+      - run: python scripts/inject_password_gate.py
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Rebuild GitHub Pages (shinylive export)"
