@@ -1167,23 +1167,6 @@ h1 span { color: var(--gold); }
   </div>
 </header>
 
-<div class="method-bar" style="line-height:2.2; display:block;" id="method-bar">
-  <strong>Methodology:</strong>&nbsp;
-  Roster, BPM, PORPAG (PRPG!) and indDrtg pulled live from this dashboard's own Barttorvik-sourced dataset — nothing on this tab is hand-typed.
-  &nbsp;·&nbsp;
-  <strong>ORtg</strong> = <span id="method-ortg-formula">fitting…</span> — OLS-fit on every D1 player-season in the dataset (≥8 mpg), not hand-picked weights.
-  &nbsp;·&nbsp;
-  <strong>DRtg</strong> = minutes-weighted avg of each player's own Barttorvik <code>adj_drtg</code> (already opponent-adjusted — no separate defensive formula layered on top)
-  &nbsp;·&nbsp;
-  <strong>eFG%</strong> = TS% × 0.92 · <strong>3PT%</strong> = volume-weighted avg · <strong>ARate / TORate</strong> = USG-weighted avg · <strong>OReb% / DReb%</strong> = Σ(rate × min/200) × 5
-  &nbsp;·&nbsp;
-  <strong>Conf strength</strong> = minutes-weighted net rating (adjOE − adj_drtg) by conference, computed from this same dataset, relative to Big West. Since BPM is already schedule-adjusted, "Conf-Adjusted" mode layers this delta on top for context — treat it as a secondary view, not the headline number.
-  &nbsp;·&nbsp;
-  <span id="method-freshness">Loading data freshness…</span>
-  &nbsp;·&nbsp;
-  Click any player for a stat-grounded profile — no scouting prose, just percentile ranks vs. D1 peers
-</div>
-
 <div class="layout">
   <!-- ROSTER PANEL -->
   <div class="roster-panel">
