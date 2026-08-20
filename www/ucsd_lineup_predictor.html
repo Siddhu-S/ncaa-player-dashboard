@@ -7,20 +7,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #f0f2f5;
-  --surface: #ffffff;
-  --card: #f7f8fa;
-  --border: #dde1e7;
-  --border2: #c8cdd6;
-  --gold: #8a5f0e;
-  --gold-dim: #a07520;
-  --blue: #003DA5;
-  --blue-light: #1a4fba;
-  --text: #111827;
-  --muted: #6b7280;
-  --green: #15803d;
-  --red: #b91c1c;
-  --yellow: #92400e;
+  --bg: #0f1623;
+  --surface: #1a2540;
+  --card: #141d33;
+  --border: #1e2d47;
+  --border2: #2c3f61;
+  --gold: #c8a84b;
+  --gold-dim: #a68a3c;
+  --blue: #4a9eed;
+  --blue-light: #6cb0f5;
+  --text: #c8d4e8;
+  --muted: #8a9bb8;
+  --green: #5ab87a;
+  --red: #e0637a;
+  --yellow: #e8963a;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -50,7 +50,7 @@ header::after {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: radial-gradient(ellipse at 80% 50%, rgba(0,61,165,0.08) 0%, transparent 70%);
+  background: radial-gradient(ellipse at 80% 50%, rgba(74,158,237,0.08) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -162,7 +162,7 @@ h1 span { color: var(--gold); }
   position: relative;
 }
 
-.player-row:hover { background: #eef1f5; }
+.player-row:hover { background: rgba(255,255,255,0.04); }
 
 .player-row.selected {
   background: var(--surface);
@@ -171,7 +171,7 @@ h1 span { color: var(--gold); }
 
 .player-row.in-lineup {
   border-left-color: var(--blue-light);
-  background: rgba(42, 95, 212, 0.06);
+  background: rgba(108, 176, 245, 0.06);
 }
 
 .p-num {
@@ -314,7 +314,7 @@ h1 span { color: var(--gold); }
 .slot.filled {
   border-color: var(--blue-light);
   border-style: solid;
-  background: rgba(42, 95, 212, 0.05);
+  background: rgba(108, 176, 245, 0.05);
 }
 
 .slot-pos {
@@ -440,7 +440,7 @@ h1 span { color: var(--gold); }
 
 .ac-body {
   font-size: 11px;
-  color: #9aa0aa;
+  color: var(--muted);
   line-height: 1.7;
   font-family: 'Crimson Pro', serif;
   font-size: 13px;
@@ -592,7 +592,7 @@ h1 span { color: var(--gold); }
 .drawer-note {
   font-family: 'Crimson Pro', serif;
   font-size: 13px;
-  color: #8a9099;
+  color: var(--muted);
   line-height: 1.7;
   border-top: 1px solid var(--border);
   padding-top: 16px;
@@ -832,7 +832,7 @@ h1 span { color: var(--gold); }
   border-radius: 50%;
   background: var(--gold);
   cursor: grab;
-  border: 2px solid #0a0a0a;
+  border: 2px solid var(--bg);
   box-shadow: 0 0 0 2px rgba(200,168,75,0.2);
   transition: transform 0.12s ease;
 }
@@ -843,7 +843,7 @@ h1 span { color: var(--gold); }
   height: 14px;
   border-radius: 50%;
   background: var(--gold);
-  border: 2px solid #0a0a0a;
+  border: 2px solid var(--bg);
   cursor: grab;
 }
 
@@ -891,19 +891,19 @@ h1 span { color: var(--gold); }
 
 /* SKILL TRANSLATION PANEL */
 .skill-translation { margin: 14px 0 10px; border: 1px solid var(--border2); border-radius: 4px; overflow: hidden; }
-.skill-translation-header { background: rgba(138,95,14,0.06); border-bottom: 1px solid var(--border); padding: 7px 12px; display: flex; align-items: center; justify-content: space-between; }
+.skill-translation-header { background: rgba(200,168,75,0.06); border-bottom: 1px solid var(--border); padding: 7px 12px; display: flex; align-items: center; justify-content: space-between; }
 .skill-translation-title { font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-dim); }
 .skill-translation-score { font-family: 'Bebas Neue', sans-serif; font-size: 16px; }
 .skill-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); }
 .skill-row:last-child { border-bottom: none; }
 .skill-label { font-size: 9px; color: var(--muted); width: 90px; flex-shrink: 0; }
-.skill-bar-track { flex: 1; height: 4px; background: #dde1e7; border-radius: 2px; overflow: hidden; }
+.skill-bar-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .skill-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
 .skill-val { font-family: 'Bebas Neue', sans-serif; font-size: 13px; width: 36px; text-align: right; flex-shrink: 0; }
 .skill-badge { font-size: 7px; letter-spacing: 0.1em; padding: 1px 5px; border-radius: 2px; width: 52px; text-align: center; flex-shrink: 0; }
-.badge-portable { background: rgba(21,128,61,0.10); color: var(--green); }
-.badge-moderate { background: rgba(146,64,14,0.10); color: var(--yellow); }
-.badge-fragile  { background: rgba(185,28,28,0.10); color: var(--red); }
+.badge-portable { background: rgba(90,184,122,0.10); color: var(--green); }
+.badge-moderate { background: rgba(232,150,58,0.10); color: var(--yellow); }
+.badge-fragile  { background: rgba(224,99,122,0.10); color: var(--red); }
 .skill-translation-footer { padding: 7px 12px; font-size: 9px; color: var(--muted); font-style: italic; border-top: 1px solid var(--border); background: rgba(0,0,0,0.02); }
 
 /* SAVED LINEUPS */
@@ -928,7 +928,7 @@ h1 span { color: var(--gold); }
   cursor: pointer;
   transition: all 0.15s;
 }
-.saved-preset-btn:hover { background: rgba(138,95,14,0.08); }
+.saved-preset-btn:hover { background: rgba(200,168,75,0.08); }
 .saved-preset-btn .sp-delete {
   font-size: 9px;
   color: var(--muted);
@@ -986,7 +986,7 @@ h1 span { color: var(--gold); }
 }
 .portal-tag {
   font-size: 8px;
-  background: rgba(138,95,14,0.1);
+  background: rgba(200,168,75,0.1);
   color: var(--gold-dim);
   border-radius: 2px;
   padding: 1px 5px;
@@ -1059,7 +1059,7 @@ h1 span { color: var(--gold); }
   gap: 10px;
 }
 .nine-man-slot.filled { border-color: var(--gold-dim); }
-.nine-man-slot.drag-over { border-color: var(--gold); background: rgba(138,95,14,0.06); }
+.nine-man-slot.drag-over { border-color: var(--gold); background: rgba(200,168,75,0.06); }
 .nine-man-slot-num {
   font-size: 8px;
   color: var(--muted);
@@ -1802,7 +1802,7 @@ function playerRowHtml(id, p, opts) {
   const numColor = opts.muted ? 'color: var(--muted);' : (opts.gold ? 'color: var(--gold);' : '');
   const nameClass = opts.gold ? 'p-name new-player' : 'p-name';
   const badges = [];
-  if (opts.badge) badges.push(`<span style="font-size:8px; background:rgba(138,95,14,0.12); color:var(--gold-dim); border-radius:2px; padding:1px 4px; margin-left:4px;">${opts.badge}</span>`);
+  if (opts.badge) badges.push(`<span style="font-size:8px; background:rgba(200,168,75,0.12); color:var(--gold-dim); border-radius:2px; padding:1px 4px; margin-left:4px;">${opts.badge}</span>`);
   if (p.lowSample) badges.push(`<span class="sample-badge" style="font-size:8px; border-radius:2px; padding:1px 4px; margin-left:4px;" title="${p.gp} GP · ${p.mpg} mpg — small sample, ratings unreliable">Low sample</span>`);
   const sub = [p.ht || '—', p.yr || '', p.pos || '', opts.school || ''].filter(Boolean).join(' · ');
   return `
@@ -2435,7 +2435,7 @@ function renderMinutesSummary() {
       + '<div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">'
       + '<div style="font-family:\'Bebas Neue\',sans-serif; font-size:14px; color:' + bprC + '; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + p.name.split(' ').pop() + '</div>'
       + (isStarter
-          ? '<div style="font-size:7px; background:rgba(42,95,212,0.2); color:var(--blue-light); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">START</div>'
+          ? '<div style="font-size:7px; background:rgba(108,176,245,0.2); color:var(--blue-light); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">START</div>'
           : '<div style="font-size:7px; background:rgba(200,168,75,0.1); color:var(--gold-dim); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">BENCH</div>')
       + '</div>'
       + '<div style="display:flex; align-items:center; gap:8px;">'
@@ -2596,7 +2596,7 @@ function renderBench() {
             <div style="font-family:'Bebas Neue',sans-serif; font-size:14px; color:${bprC}; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
               ${p.name.split(' ').pop()}
             </div>
-            ${isStarter ? `<div style="font-size:7px; background:rgba(42,95,212,0.2); color:var(--blue-light); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">START</div>` : `<div style="font-size:7px; background:rgba(200,168,75,0.1); color:var(--gold-dim); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">BENCH</div>`}
+            ${isStarter ? `<div style="font-size:7px; background:rgba(108,176,245,0.2); color:var(--blue-light); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">START</div>` : `<div style="font-size:7px; background:rgba(200,168,75,0.1); color:var(--gold-dim); border-radius:2px; padding:1px 4px; letter-spacing:0.1em;">BENCH</div>`}
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <div style="flex:1; height:4px; background:var(--border); border-radius:2px; overflow:hidden;">
@@ -3330,7 +3330,7 @@ function initProjectedStatsCard() {
             <div style="width:48px; font-size:13px; font-family:'Bebas Neue',sans-serif; color:var(--green);">17.0%</div>
             <div style="width:56px; font-size:13px; font-family:'Bebas Neue',sans-serif; color:var(--green);">73.0%</div>
           </div>
-          <div style="display:flex; gap:0; padding:5px 0; min-width:600px; background:rgba(138,95,14,0.06);" id="proj-stats-row">
+          <div style="display:flex; gap:0; padding:5px 0; min-width:600px; background:rgba(200,168,75,0.06);" id="proj-stats-row">
             <div style="width:120px; font-size:10px; color:var(--gold); font-style:italic;">2026-27 Projected ↗</div>
             <div style="width:64px; font-size:13px; font-family:'Bebas Neue',sans-serif;" id="proj-netrtg">—</div>
             <div style="width:56px; font-size:13px; font-family:'Bebas Neue',sans-serif;" id="proj-ortg">—</div>
