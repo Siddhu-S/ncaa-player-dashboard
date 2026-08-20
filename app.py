@@ -2207,6 +2207,7 @@ app_ui = ui.page_fluid(
             .tab-btn.active-d3 { color:#e8a44a;        border-bottom-color:#e8a44a; }
             .tab-btn.active-info { color:var(--ink);    border-bottom-color:var(--ink); }
             .tab-btn.active-wl { color:#7cc47a;         border-bottom-color:#7cc47a; }
+            .tab-btn.active-ucsd { color:#8a5f0e;       border-bottom-color:#8a5f0e; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
 
             /* watchlist badge on tab button */
@@ -2789,7 +2790,7 @@ app_ui = ui.page_fluid(
                     p.classList.remove('active');
                 });
                 document.querySelectorAll('.tab-btn').forEach(function(b) {
-                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl');
+                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd');
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
@@ -2863,7 +2864,10 @@ app_ui = ui.page_fluid(
                ui.tags.button(
                    ui.HTML('Watchlist <span id="wl-badge" class="wl-badge" style="display:none">0</span>'),
                    id="btn-wl", class_="tab-btn",
-                   onclick="switchTab('wl')")),
+                   onclick="switchTab('wl')"),
+               ui.div({"class": "tab-sep"}),
+               ui.tags.button("UCSD 2026-27", id="btn-ucsd", class_="tab-btn",
+                              onclick="switchTab('ucsd')")),
 
         ui.div({"id": "tab-content"},
 
@@ -2904,6 +2908,14 @@ app_ui = ui.page_fluid(
                               ),
                           ),
                           ui.output_ui("watchlist_ui"))),
+
+            ui.div(
+                {"id": "ucsd-tab", "class": "tab-panel"},
+                ui.tags.iframe(
+                    src="ucsd_lineup_predictor.html",
+                    style="flex:1; width:100%; height:100%; border:none;",
+                ),
+            ),
         ),
 
         ui.div({"id": "site-footer"}, "Developed at UC San Diego · © 2026"),
