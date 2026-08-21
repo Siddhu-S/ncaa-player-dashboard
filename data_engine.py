@@ -679,7 +679,10 @@ def load_d1_data(
     df["PC4"] = n("val_PC1")
 
     df["bpm"] = n("bpm")
+    df["obpm"] = n("obpm")
+    df["dbpm"] = n("dbpm")
     df["porpag"] = n("PORPAG")
+    df["adj_drtg"] = n("adj_drtg")
 
     # Low-sample flag for default D-I filtering and player detail warnings.
     df["low_sample_size"] = (df["mpg"] < 10) | (df["gp"] < 5)

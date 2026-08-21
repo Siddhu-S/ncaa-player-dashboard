@@ -1608,6 +1608,7 @@ window.storage = {
   },
   set: async (key, value) => { localStorage.setItem(key, value); },
 };
+const WATCHLIST_STORAGE_KEY = 'ucsd_watchlist_lineup_candidates_v2';
 
 // ─── PLAYER DATA ───────────────────────────────────────────────
 let PORTAL_PLAYERS = []; // populated from ucsd_model_data.json (real available-transfer players)
@@ -1664,6 +1665,159 @@ function getEffectiveBpr(player) {
 }
 
 let PLAYERS = {}; // populated from ucsd_model_data.json by loadModelData()
+let WATCHLIST_POTENTIALS = [];
+
+function toFiniteNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function formatSignedStat(value, digits = 1) {
+  const num = toFiniteNumber(value, 0);
+  return `${num > 0 ? '+' : ''}${num.toFixed(digits)}`;
+}
+
+function formatStat(value, digits = 1) {
+  return toFiniteNumber(value, 0).toFixed(digits);
+}
+
+function activeWatchlistIds() {
+  const active = new Set(lineup.filter(Boolean));
+  Object.values(benchMinutes || {}).forEach((value) => {
+    if (typeof value === 'string' && value) active.add(value);
+  });
+  if (Array.isArray(nmPlayers)) {
+    nmPlayers.forEach((player) => {
+      if (player && player._pid) active.add(player._pid);
+    });
+  }
+  return active;
+}
+
+function normalizeWatchlistCandidate(candidate) {
+  if (!candidate || !candidate.lineupId) return null;
+  return {
+    id: String(candidate.lineupId),
+    sourceId: String(candidate.sourceId || candidate.lineupId),
+    name: String(candidate.name || 'Unknown Player'),
+    team: String(candidate.team || ''),
+    conf: String(candidate.conf || ''),
+    division: String(candidate.division || ''),
+    num: candidate.num ?? '–',
+    pos: String(candidate.pos || 'G/F'),
+    yr: String(candidate.yr || ''),
+    ht: String(candidate.ht || '—'),
+    htIn: toFiniteNumber(candidate.htIn, 0),
+    bpr: toFiniteNumber(candidate.bpr, 0),
+    adjBpr: toFiniteNumber(candidate.adjBpr ?? candidate.bpr, toFiniteNumber(candidate.bpr, 0)),
+    obpr: toFiniteNumber(candidate.obpr, 0),
+    dbpr: toFiniteNumber(candidate.dbpr, 0),
+    prpgi: toFiniteNumber(candidate.prpgi, 0),
+    ts: toFiniteNumber(candidate.ts, 0),
+    usg: toFiniteNumber(candidate.usg, 0),
+    threeRate: toFiniteNumber(candidate.threeRate, 0),
+    threePct: toFiniteNumber(candidate.threePct, 0),
+    arate: toFiniteNumber(candidate.arate, 0),
+    torate: toFiniteNumber(candidate.torate, 0),
+    stl: toFiniteNumber(candidate.stl, 0),
+    blk: toFiniteNumber(candidate.blk, 0),
+    dreb: toFiniteNumber(candidate.dreb, 0),
+    oreb: toFiniteNumber(candidate.oreb, 0),
+    ftr: toFiniteNumber(candidate.ftr, 0),
+    indDrtg: toFiniteNumber(candidate.indDrtg, 102.5),
+    note: String(candidate.note || ''),
+    isPotential: true,
+    isWatchlistPotential: true,
+  };
+}
+
+function applyWatchlistPotentials(candidates) {
+  const nextCandidates = Array.isArray(candidates)
+    ? candidates.map(normalizeWatchlistCandidate).filter(Boolean)
+    : [];
+  const nextIds = new Set(nextCandidates.map((candidate) => candidate.id));
+  const protectedIds = activeWatchlistIds();
+
+  Object.entries(PLAYERS).forEach(([id, player]) => {
+    if (!player || !player.isWatchlistPotential) return;
+    if (nextIds.has(id)) return;
+    if (protectedIds.has(id)) {
+      player.isPotential = false;
+      player.isWatchlistPotential = false;
+      return;
+    }
+    delete PLAYERS[id];
+  });
+
+  WATCHLIST_POTENTIALS = nextCandidates;
+  nextCandidates.forEach((candidate) => {
+    PLAYERS[candidate.id] = {
+      ...PLAYERS[candidate.id],
+      ...candidate,
+    };
+  });
+
+  const rosterEl = document.getElementById('roster-list');
+  if (rosterEl) renderRosterPanel();
+}
+
+function readWatchlistPotentialsFromStorage() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn('Unable to read watchlist lineup candidates', err);
+    return [];
+  }
+}
+
+function readWatchlistPotentialsFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('watchlist');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function readWatchlistPotentialsFromParent() {
+  try {
+    if (!window.parent || window.parent === window) return [];
+    const node = window.parent.document.getElementById('watchlist-lineup-data');
+    if (!node) return [];
+    const raw = (node.textContent || '').trim();
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type !== 'ucsd-watchlist-lineup-sync') return;
+  applyWatchlistPotentials(event.data.payload);
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key !== WATCHLIST_STORAGE_KEY) return;
+  applyWatchlistPotentials(readWatchlistPotentialsFromStorage());
+});
+
+let lastParentWatchlistPayload = '';
+function syncWatchlistPotentialsFromParent() {
+  const candidates = readWatchlistPotentialsFromParent();
+  const nextKey = JSON.stringify(candidates);
+  if (nextKey === lastParentWatchlistPayload) return;
+  lastParentWatchlistPayload = nextKey;
+  applyWatchlistPotentials(candidates);
+}
 
 
 // Helper: display name (Last name, or First Initial. Last if ambiguous)
@@ -1722,6 +1876,19 @@ async function loadModelData() {
   PORTAL_PLAYERS.slice(0, 6).forEach(p => {
     PLAYERS[p.id] = { ...p, isPotential: true };
   });
+  const urlWatchlistPotentials = readWatchlistPotentialsFromUrl();
+  const hasUrlWatchlistPotentials = Array.isArray(urlWatchlistPotentials) && urlWatchlistPotentials.length > 0;
+  if (hasUrlWatchlistPotentials) {
+    applyWatchlistPotentials(urlWatchlistPotentials);
+    try {
+      localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(urlWatchlistPotentials));
+    } catch (err) {
+      console.warn('Unable to persist watchlist lineup candidates from URL', err);
+    }
+  } else {
+    applyWatchlistPotentials(readWatchlistPotentialsFromStorage());
+  }
+  syncWatchlistPotentialsFromParent();
   DEFAULT_ROTATION = buildPresetLineup('base').rotation;
 
   const formulaEl = document.getElementById('method-ortg-formula');
@@ -1809,14 +1976,26 @@ function renderRosterPanel() {
   if (!el) return;
   const returners = Object.entries(PLAYERS).filter(([, p]) => !p.isNew && !p.isPotential);
   const newAdds   = Object.entries(PLAYERS).filter(([, p]) => p.isNew && !p.isPotential);
-  const potential = Object.entries(PLAYERS).filter(([, p]) => p.isPotential);
+  const potential = Object.entries(PLAYERS)
+    .filter(([, p]) => p.isPotential)
+    .sort(([, left], [, right]) => {
+      const watchlistDelta = Number(Boolean(right.isWatchlistPotential)) - Number(Boolean(left.isWatchlistPotential));
+      if (watchlistDelta !== 0) return watchlistDelta;
+      return (right.adjBpr ?? right.bpr ?? -999) - (left.adjBpr ?? left.bpr ?? -999);
+    });
 
   let html = '<div class="group-label">Returners</div>';
   html += returners.map(([id, p]) => playerRowHtml(id, p)).join('');
   html += '<div class="group-label" style="color: var(--gold);">New Additions (2026 transfer portal, committed)</div>';
   html += newAdds.map(([id, p]) => playerRowHtml(id, p, { gold: true, badge: p.fromConf, school: p.priorSchool })).join('');
   html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — real available (uncommitted) transfers, ranked by BPM</div>';
-  html += potential.map(([id, p]) => playerRowHtml(id, p, { muted: true, school: p.priorSchool + ' (' + p.fromConf + ')' })).join('');
+  html += potential.map(([id, p]) => {
+    const school = p.isWatchlistPotential
+      ? [p.team, p.conf ? '(' + p.conf + ')' : '', p.division].filter(Boolean).join(' ')
+      : p.priorSchool + ' (' + p.fromConf + ')';
+    const badge = p.isWatchlistPotential ? 'Watchlist' : null;
+    return playerRowHtml(id, p, { muted: true, school, badge });
+  }).join('');
   el.innerHTML = html;
 }
 
@@ -2727,19 +2906,28 @@ function refreshPositionTotal(slotIdx) {
 function openDrawer(id) {
   const p = PLAYERS[id];
   if (!p) return;
+  const bpm = toFiniteNumber(p.bpr, 0);
+  const prpgi = toFiniteNumber(p.prpgi, 0);
+  const composite = getEffectiveBpr(p);
+  const ts = toFiniteNumber(p.ts, 0);
+  const usg = toFiniteNumber(p.usg, 0);
+  const arate = toFiniteNumber(p.arate, 0);
+  const stl = toFiniteNumber(p.stl, 0);
+  const blk = toFiniteNumber(p.blk, 0);
+  const threeRate = toFiniteNumber(p.threeRate, 0) * 100;
   document.getElementById('drawer-tag').textContent = `${p.num != null ? '#' + p.num : ''} ${p.pos} · ${p.yr} · ${p.ht}`;
   document.getElementById('drawer-name').textContent = p.name;
-  document.getElementById('drawer-sub').textContent = `BPR ${p.bpr>0?'+':''}${p.bpr} · TS% ${p.ts} · USG% ${p.usg}`;
+  document.getElementById('drawer-sub').textContent = `BPR ${formatSignedStat(bpm, 2)} · TS% ${formatStat(ts)} · USG% ${formatStat(usg)}`;
   document.getElementById('drawer-stats').innerHTML = `
-    <div class="ds-cell"><div class="ds-label">BPM</div><div class="ds-val" style="color:${p.bpr>=3?'var(--green)':p.bpr>=1?'var(--gold)':p.bpr>=-1?'var(--muted)':'var(--red)'}">${p.bpr>0?'+':''}${p.bpr}</div></div>
-    <div class="ds-cell"><div class="ds-label">PRPG!</div><div class="ds-val" style="color:${(p.prpgi||0)>=1.5?'var(--green)':(p.prpgi||0)>=0.5?'var(--gold)':(p.prpgi||0)>=-0.5?'var(--muted)':'var(--red)'}">${(p.prpgi||0)>0?'+':''}${(p.prpgi||0).toFixed(1)}</div></div>
-    <div class="ds-cell"><div class="ds-label">Composite</div><div class="ds-val" style="color:${getEffectiveBpr(p)>=2?'var(--green)':getEffectiveBpr(p)>=0?'var(--gold)':'var(--red)'}">${getEffectiveBpr(p)>0?'+':''}${getEffectiveBpr(p)}</div></div>
-    <div class="ds-cell"><div class="ds-label">TS%</div><div class="ds-val" style="color:${p.ts>=58?'var(--green)':p.ts>=54?'var(--gold)':'var(--muted)'}">${p.ts}</div></div>
-    <div class="ds-cell"><div class="ds-label">USG%</div><div class="ds-val">${p.usg}</div></div>
-    <div class="ds-cell"><div class="ds-label">A-Rate</div><div class="ds-val">${p.arate}%</div></div>
-    <div class="ds-cell"><div class="ds-label">STL%</div><div class="ds-val">${p.stl}%</div></div>
-    <div class="ds-cell"><div class="ds-label">BLK%</div><div class="ds-val">${p.blk}%</div></div>
-    <div class="ds-cell"><div class="ds-label">3PT Rate</div><div class="ds-val">${(p.threeRate*100).toFixed(0)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">BPM</div><div class="ds-val" style="color:${bpm>=3?'var(--green)':bpm>=1?'var(--gold)':bpm>=-1?'var(--muted)':'var(--red)'}">${formatSignedStat(bpm, 2)}</div></div>
+    <div class="ds-cell"><div class="ds-label">PRPG!</div><div class="ds-val" style="color:${prpgi>=1.5?'var(--green)':prpgi>=0.5?'var(--gold)':prpgi>=-0.5?'var(--muted)':'var(--red)'}">${formatSignedStat(prpgi)}</div></div>
+    <div class="ds-cell"><div class="ds-label">Composite</div><div class="ds-val" style="color:${composite>=2?'var(--green)':composite>=0?'var(--gold)':'var(--red)'}">${formatSignedStat(composite)}</div></div>
+    <div class="ds-cell"><div class="ds-label">TS%</div><div class="ds-val" style="color:${ts>=58?'var(--green)':ts>=54?'var(--gold)':'var(--muted)'}">${formatStat(ts)}</div></div>
+    <div class="ds-cell"><div class="ds-label">USG%</div><div class="ds-val">${formatStat(usg)}</div></div>
+    <div class="ds-cell"><div class="ds-label">A-Rate</div><div class="ds-val">${formatStat(arate)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">STL%</div><div class="ds-val">${formatStat(stl)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">BLK%</div><div class="ds-val">${formatStat(blk)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">3PT Rate</div><div class="ds-val">${threeRate.toFixed(0)}%</div></div>
   `;
   document.getElementById('drawer-note').innerHTML = p.note;
   document.getElementById('drawer').classList.add('open');
@@ -3837,6 +4025,7 @@ async function initApp() {
   Object.assign(benchMinutes, DEFAULT_ROTATION);
   renderConferenceContext();
   renderPortal();
+  setInterval(syncWatchlistPotentialsFromParent, 1000);
   setTimeout(() => { renderBench(); updateRatings(); initSliderFills(); initSavedLineups(); initProjectedStatsCard(); }, 100);
 }
 

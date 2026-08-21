@@ -9,6 +9,7 @@ import html
 import json
 import math
 import re
+from urllib.parse import quote
 
 from data_engine import (
     load_data, load_d1_data,
@@ -1548,6 +1549,80 @@ def watchlist_rows(player_ids):
         rows.append((pid, row_.iloc[0], df_, div_))
     return sorted(rows, key=lambda x: (x[3], str(x[1]["name"])))
 
+
+def _lineup_text(value, default=""):
+    if pd.isna(value):
+        return default
+    text = str(value).strip()
+    return text if text else default
+
+
+def _lineup_number(value, default=0.0, scale_small=False):
+    num = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(num):
+        return float(default)
+    num = float(num)
+    if scale_small and abs(num) <= 1.5:
+        num *= 100.0
+    return num
+
+
+def build_watchlist_lineup_candidates(player_ids):
+    candidates = []
+    for pid, row, _df, div_ in watchlist_rows(player_ids):
+        team = _lineup_text(row.get("team"), "Unknown Team")
+        conf = _lineup_text(row.get("conf"), "")
+        ht_in = int(round(_lineup_number(row.get("heightIn"), default=0)))
+        ht = _lineup_text(row.get("ht"), height_str(ht_in) if ht_in > 0 else "—")
+        bpm = _lineup_number(row.get("bpm"), default=row.get("bpr", 0))
+        adj_bpm = _lineup_number(row.get("adj_bpm"), default=bpm)
+        three_pct = _lineup_number(row.get("tp"), default=0, scale_small=True)
+        ts_pct = _lineup_number(row.get("ts"), default=0, scale_small=True)
+        ftr = _lineup_number(row.get("ftr"), default=0)
+        prpgi = _lineup_number(row.get("porpag"), default=row.get("prpgi", 0))
+        ind_drtg = _lineup_number(row.get("adj_drtg"), default=row.get("indDrtg", 102.5))
+        candidate = {
+            "lineupId": f"watchlist_{pid}",
+            "sourceId": pid,
+            "name": _lineup_text(row.get("name"), "Unknown Player"),
+            "team": team,
+            "conf": conf,
+            "division": div_,
+            "num": _lineup_text(row.get("num"), "–"),
+            "pos": _lineup_text(row.get("pos"), "G/F"),
+            "yr": _lineup_text(row.get("cls"), ""),
+            "ht": ht,
+            "htIn": ht_in,
+            "bpr": bpm,
+            "adjBpr": adj_bpm,
+            "obpr": _lineup_number(row.get("obpm"), default=row.get("obpr", 0)),
+            "dbpr": _lineup_number(row.get("dbpm"), default=row.get("dbpr", 0)),
+            "prpgi": prpgi,
+            "ts": ts_pct,
+            "usg": _lineup_number(row.get("usg"), default=0, scale_small=True),
+            "threeRate": _lineup_number(row.get("three_share"), default=0),
+            "threePct": three_pct,
+            "arate": _lineup_number(row.get("assist_creation"), default=0),
+            "torate": _lineup_number(row.get("tov_pct"), default=0),
+            "stl": _lineup_number(row.get("stl_pct"), default=row.get("stl_arch", 0)),
+            "blk": _lineup_number(row.get("blk_pct"), default=row.get("blk_arch", 0)),
+            "dreb": _lineup_number(row.get("drb_pct"), default=row.get("dreb_arch", 0)),
+            "oreb": _lineup_number(row.get("orb_pct"), default=row.get("orb", 0)),
+            "ftr": ftr,
+            "indDrtg": ind_drtg,
+            "note": (
+                f"<strong>{html.escape(_lineup_text(row.get('name'), 'Unknown Player'))}"
+                f" — {html.escape(team)}"
+                f"{f' ({html.escape(conf)})' if conf else ''}"
+                f" · {html.escape(div_)} · {html.escape(_lineup_text(row.get('cls'), ''))}"
+                f" · {html.escape(ht)}</strong><br>"
+                f"BPM: {adj_bpm:+.1f} · TS%: {ts_pct:.1f} · PRPG!: {prpgi:+.1f}"
+                f" · 3PT%: {three_pct:.1f} · DRtg: {ind_drtg:.1f}"
+            ),
+        }
+        candidates.append(candidate)
+    return candidates
+
 def make_watchlist_radar(player_ids, stat_keys=None):
     fig = go.Figure()
     rows = watchlist_rows(player_ids)
@@ -2909,13 +2984,7 @@ app_ui = ui.page_fluid(
                           ),
                           ui.output_ui("watchlist_ui"))),
 
-            ui.div(
-                {"id": "ucsd-tab", "class": "tab-panel"},
-                ui.tags.iframe(
-                    src="ucsd_lineup_predictor.html",
-                    style="flex:1; width:100%; height:100%; border:none;",
-                ),
-            ),
+            ui.output_ui("ucsd_tab_ui"),
         ),
 
         ui.div({"id": "site-footer"}, "Developed at UC San Diego · © 2026"),
@@ -2924,6 +2993,8 @@ app_ui = ui.page_fluid(
     ui.output_ui("d1_modal_trigger"),
     ui.output_ui("d2_modal_trigger"),
     ui.output_ui("d3_modal_trigger"),
+    ui.output_ui("watchlist_lineup_data"),
+    ui.output_ui("watchlist_lineup_sync"),
 )
 
 
@@ -3946,6 +4017,69 @@ def server(input, output, session):
         return ui.div(
             ui.tags.script(js),
             ui.div({"class": "wl-grid"}, *cards))
+
+    @output
+    @render.ui
+    def ucsd_tab_ui():
+        payload = build_watchlist_lineup_candidates(watchlist.get())
+        # Keep the iframe payload lean enough for query-string transport.
+        query_payload = [
+            {
+                key: value
+                for key, value in candidate.items()
+                if key != "note"
+            }
+            for candidate in payload
+        ]
+        cache_buster = "20260821b"
+        src = f"ucsd_lineup_predictor.html?v={cache_buster}"
+        if query_payload:
+            src = (
+                f"{src}&watchlist="
+                f"{quote(json.dumps(query_payload, separators=(',', ':')))}"
+            )
+        return ui.div(
+            {"id": "ucsd-tab", "class": "tab-panel"},
+            ui.tags.iframe(
+                id="ucsd-lineup-frame",
+                src=src,
+                style="flex:1; width:100%; height:100%; border:none;",
+            ),
+        )
+
+    @output
+    @render.ui
+    def watchlist_lineup_data():
+        payload = build_watchlist_lineup_candidates(watchlist.get())
+        payload_json = json.dumps(payload).replace("</", "<\\/")
+        return ui.div(
+            payload_json,
+            id="watchlist-lineup-data",
+            style="display:none;",
+            **{"data-count": str(len(payload))}
+        )
+
+    @output
+    @render.ui
+    def watchlist_lineup_sync():
+        payload = build_watchlist_lineup_candidates(watchlist.get())
+        payload_json = json.dumps(payload).replace("</", "<\\/")
+        script = f"""
+        (function() {{
+          const payload = {payload_json};
+          try {{
+            localStorage.setItem('ucsd_watchlist_lineup_candidates_v1', JSON.stringify(payload));
+          }} catch (err) {{}}
+          const frame = document.getElementById('ucsd-lineup-frame');
+          if (frame && frame.contentWindow) {{
+            frame.contentWindow.postMessage({{
+              type: 'ucsd-watchlist-lineup-sync',
+              payload
+            }}, window.location.origin);
+          }}
+        }})();
+        """
+        return ui.tags.script(script)
 
     @output
     @render_widget
