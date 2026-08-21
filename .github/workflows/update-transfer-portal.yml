@@ -1,0 +1,24 @@
+name: Update transfer portal cache
+
+on:
+  schedule:
+    - cron: "20 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-transfer-portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas
+      - run: python scripts/update_transfer_portal.py --source barttorvik --year 2026 --start 20251101 --end 20260501 --output transfer_portal_cache.csv --change-log transfer_portal_change_log.csv
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update transfer portal cache"
+          file_pattern: transfer_portal_cache.csv transfer_portal_change_log.csv
