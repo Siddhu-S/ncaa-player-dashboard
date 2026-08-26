@@ -37,6 +37,19 @@ jobs:
       # inside the new app.json, bloating it further on every run.
       - run: rm -rf docs
       - run: shinylive export . docs
+      # Gates the exported site behind a password prompt. Add a repository
+      # secret named SITE_PASSWORD to enable it; without one, the site
+      # publishes unprotected (a warning is logged below).
+      - name: Apply password gate
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: |
+          if [ -z "$SITE_PASSWORD" ]; then
+            echo "::warning::SITE_PASSWORD secret not set; publishing docs/ without a password gate."
+          else
+            HASH=$(printf '%s' "$SITE_PASSWORD" | sha256sum | cut -d' ' -f1)
+            python scripts/inject_password_gate.py docs/index.html "$HASH"
+          fi
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Rebuild GitHub Pages (shinylive export)"
