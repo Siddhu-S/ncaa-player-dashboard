@@ -51,6 +51,14 @@ GATE_TEMPLATE = """
   var STORAGE_KEY = "ncaa-dashboard-authed-v1";
   var EXPECTED_HASH = "{password_hash}";
 
+  function unlock() {{
+    document.body.classList.remove("pw-locked");
+    var gate = document.getElementById("pw-gate");
+    if (gate) {{
+      gate.remove();
+    }}
+  }}
+
   function sha256Hex(text) {{
     var enc = new TextEncoder().encode(text);
     return crypto.subtle.digest("SHA-256", enc).then(function(buf) {{
@@ -61,6 +69,7 @@ GATE_TEMPLATE = """
   }}
 
   if (sessionStorage.getItem(STORAGE_KEY) === EXPECTED_HASH) {{
+    unlock();
     return;
   }}
 
@@ -72,8 +81,7 @@ GATE_TEMPLATE = """
     sha256Hex(val).then(function(hash) {{
       if (hash === EXPECTED_HASH) {{
         sessionStorage.setItem(STORAGE_KEY, EXPECTED_HASH);
-        document.body.classList.remove("pw-locked");
-        document.getElementById("pw-gate").remove();
+        unlock();
       }} else {{
         document.getElementById("pw-gate-error").textContent = "Incorrect password.";
       }}

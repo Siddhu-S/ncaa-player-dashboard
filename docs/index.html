@@ -4,8 +4,94 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shiny App</title>
-    <script
-      src="./shinylive/load-shinylive-sw.js"
+    
+    <meta name="ncaa-dashboard-build" content="current-player-card-rename-20260829" />
+    <script>
+      (function() {
+        var buildId = "current-player-card-rename-20260829";
+        var storageKey = "ncaa-dashboard-build-id";
+        var priorBuild = null;
+        try {
+          priorBuild = localStorage.getItem(storageKey);
+        } catch (err) {
+          priorBuild = null;
+        }
+        var needsRefresh = priorBuild !== buildId;
+
+        window.__DASHBOARD_BUILD_ID__ = buildId;
+
+        var originalFetch = window.fetch ? window.fetch.bind(window) : null;
+        if (originalFetch) {
+          window.fetch = function(resource, init) {
+            try {
+              var request = resource;
+              var url = null;
+              if (typeof resource === "string") {
+                url = new URL(resource, window.location.href);
+              } else if (resource instanceof Request) {
+                url = new URL(resource.url, window.location.href);
+              }
+              if (
+                url &&
+                (url.pathname.endsWith("/app.json") ||
+                 url.pathname.endsWith("/shinylive-sw.js") ||
+                 url.pathname.endsWith("/load-shinylive-sw.js"))
+              ) {
+                url.searchParams.set("v", buildId);
+                request = resource instanceof Request ? new Request(url.toString(), resource) : url.toString();
+              }
+              return originalFetch(request, init);
+            } catch (err) {
+              return originalFetch(resource, init);
+            }
+          };
+        }
+
+        if (!needsRefresh) {
+          return;
+        }
+
+        function done() {
+          try {
+            localStorage.setItem(storageKey, buildId);
+          } catch (err) {}
+          window.location.replace(window.location.pathname + "?v=" + encodeURIComponent(buildId));
+        }
+
+        var unregisterPromise = Promise.resolve();
+        if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
+          unregisterPromise = navigator.serviceWorker.getRegistrations()
+            .then(function(registrations) {
+              return Promise.all(registrations.map(function(reg) {
+                return reg.unregister();
+              }));
+            })
+            .catch(function() { return []; });
+        }
+
+        unregisterPromise
+          .then(function() {
+            if (!("caches" in window) || !window.caches.keys) {
+              return [];
+            }
+            return window.caches.keys().then(function(keys) {
+              return Promise.all(
+                keys
+                  .filter(function(key) {
+                    return key.toLowerCase().indexOf("shinylive") >= 0;
+                  })
+                  .map(function(key) {
+                    return window.caches.delete(key);
+                  })
+              );
+            });
+          })
+          .catch(function() { return []; })
+          .finally(done);
+      })();
+    </script>
+<script
+      src="./shinylive/load-shinylive-sw.js?v=current-player-card-rename-20260829"
       type="module"
     ></script>
     <script type="module">
@@ -58,6 +144,14 @@
   var STORAGE_KEY = "ncaa-dashboard-authed-v1";
   var EXPECTED_HASH = "52ba68719e66f92fdf5637bc289d6a643b921f0aad9ec2a42e00ec912d2bb722";
 
+  function unlock() {
+    document.body.classList.remove("pw-locked");
+    var gate = document.getElementById("pw-gate");
+    if (gate) {
+      gate.remove();
+    }
+  }
+
   function sha256Hex(text) {
     var enc = new TextEncoder().encode(text);
     return crypto.subtle.digest("SHA-256", enc).then(function(buf) {
@@ -68,6 +162,7 @@
   }
 
   if (sessionStorage.getItem(STORAGE_KEY) === EXPECTED_HASH) {
+    unlock();
     return;
   }
 
@@ -79,8 +174,7 @@
     sha256Hex(val).then(function(hash) {
       if (hash === EXPECTED_HASH) {
         sessionStorage.setItem(STORAGE_KEY, EXPECTED_HASH);
-        document.body.classList.remove("pw-locked");
-        document.getElementById("pw-gate").remove();
+        unlock();
       } else {
         document.getElementById("pw-gate-error").textContent = "Incorrect password.";
       }
