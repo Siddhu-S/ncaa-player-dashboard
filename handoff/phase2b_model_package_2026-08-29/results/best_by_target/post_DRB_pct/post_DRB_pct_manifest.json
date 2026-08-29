@@ -1,0 +1,22 @@
+{
+  "target": "post_DRB_pct",
+  "model_table": "/Users/adriankong/Desktop/TROP/phase2_transfer_analysis/output/phase2b_2026-08-21_archetypes/phase2b_model_table_archetypes.csv",
+  "feature_spec": "/Users/adriankong/Desktop/TROP/phase2_transfer_analysis/output/phase2b_2026-08-21_archetypes/phase2b_feature_spec_stats_plus_archetypes.csv",
+  "usable_feature_count": 88,
+  "train_rows": 2890,
+  "holdout_rows": 1346,
+  "cv_folds": 5,
+  "seed": 42,
+  "rf_iters": 60,
+  "extra_iters": 60,
+  "gbr_iters": 50,
+  "hgb_iters": 50,
+  "knn_iters": 40,
+  "xgb_trials": 60,
+  "lgbm_trials": 60,
+  "elastic_net_max_iter": 50000,
+  "search_jobs": 1,
+  "estimator_jobs": 1,
+  "total_variations_planned": 462,
+  "winner_model": "xgboost"
+}

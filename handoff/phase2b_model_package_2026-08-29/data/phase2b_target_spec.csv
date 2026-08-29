@@ -1,0 +1,14 @@
+target_column,target_name,target_group
+post_bpm,BPM,lineup_projection_core
+post_PORPAG,PORPAG,lineup_projection_core
+post_TS_pct,TS_pct,lineup_projection_core
+post_usg,usg,lineup_projection_core
+post_3P_pct,3P_pct,lineup_projection_core
+post_AST_pct,AST_pct,lineup_projection_core
+post_TOV_pct,TOV_pct,lineup_projection_core
+post_ORB_pct,ORB_pct,lineup_projection_core
+post_DRB_pct,DRB_pct,lineup_projection_core
+post_FTR,FTR,lineup_projection_core
+post_Stl_pct,Stl_pct,lineup_projection_core
+post_Blk_pct,Blk_pct,lineup_projection_core
+post_adj_drtg,adj_drtg,lineup_projection_core

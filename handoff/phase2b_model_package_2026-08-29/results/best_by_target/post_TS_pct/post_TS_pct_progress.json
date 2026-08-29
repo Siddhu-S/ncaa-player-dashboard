@@ -1,0 +1,21 @@
+{
+  "target": "post_TS_pct",
+  "status": "completed",
+  "models_completed": 10,
+  "total_models": 10,
+  "completed_model_names": [
+    "elastic_net",
+    "extra_trees",
+    "gradient_boosting",
+    "hist_gbm",
+    "knn",
+    "lightgbm",
+    "linear_regression",
+    "random_forest",
+    "ridge",
+    "xgboost"
+  ],
+  "total_variations_planned": 462,
+  "winner_model": "knn",
+  "results_path": "/Users/adriankong/Desktop/TROP/phase2_transfer_analysis/output/phase2b_2026-08-21/tuning/post_TS_pct/post_TS_pct_overall_results.csv"
+}
