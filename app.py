@@ -68,31 +68,42 @@ def resolve_core_v3_unstable_path():
     return CORE_V3_UNSTABLE_PATH if CORE_V3_UNSTABLE_PATH.exists() else None
 
 
+def _csv_variants(relative_path: Path):
+    """The historical comps tables ship gzipped -- plain CSVs of them push the
+    shinylive export past GitHub's 100 MB file limit, so the Pages rebuild
+    cannot commit docs/. pandas reads .csv.gz by extension, so preferring the
+    gzipped sibling is the only change the read sites need; the plain name is
+    still accepted for checkouts that carry the uncompressed files."""
+    return (relative_path.with_suffix(relative_path.suffix + ".gz"), relative_path)
+
+
 def resolve_historical_neighbors_path(pool_key: str = "all"):
     relative_path = HISTORICAL_NEIGHBORS_RELATIVE_PATHS.get(
         pool_key, HISTORICAL_NEIGHBORS_RELATIVE_PATHS["all"]
     )
-    direct = HERE.parent / relative_path
-    if direct.exists():
-        return direct
-    for base in (HERE, *HERE.parents):
-        candidate = base / relative_path
-        if candidate.exists():
-            return candidate
+    for variant in _csv_variants(relative_path):
+        direct = HERE.parent / variant
+        if direct.exists():
+            return direct
+        for base in (HERE, *HERE.parents):
+            candidate = base / variant
+            if candidate.exists():
+                return candidate
     return None
 
 
 def _resolve_optional_relative_path(relative_path: Path):
-    direct = HERE / relative_path
-    if direct.exists():
-        return direct
-    parent_direct = HERE.parent / relative_path
-    if parent_direct.exists():
-        return parent_direct
-    for base in (HERE, *HERE.parents):
-        candidate = base / relative_path
-        if candidate.exists():
-            return candidate
+    for variant in _csv_variants(relative_path):
+        direct = HERE / variant
+        if direct.exists():
+            return direct
+        parent_direct = HERE.parent / variant
+        if parent_direct.exists():
+            return parent_direct
+        for base in (HERE, *HERE.parents):
+            candidate = base / variant
+            if candidate.exists():
+                return candidate
     return None
 
 
