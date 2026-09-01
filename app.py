@@ -2843,6 +2843,12 @@ def hex_to_rgba(hex_color, alpha):
     r, g, b = (int(h[i:i+2], 16) for i in (0, 2, 4))
     return f"rgba({r},{g},{b},{alpha})"
 
+# localStorage keys for the browser-side watchlist. Bump the suffix if the
+# stored shape ever changes so old payloads are ignored rather than misread.
+WATCHLIST_STORAGE_KEY = "ucsd_watchlist_player_ids_v1"
+WATCHLIST_LINEUP_STORAGE_KEY = "ucsd_watchlist_lineup_candidates_v1"
+
+
 def watchlist_rows(player_ids):
     rows = []
     for pid in player_ids:
@@ -4973,6 +4979,56 @@ app_ui = ui.page_fluid(
             window.setInterval(styleHistoricalSelectize, 1000);
             window.setInterval(updateHistoricalHeightSliderLabels, 1000);
         """),
+
+        # The public site is a serverless shinylive export, so the watchlist
+        # can only outlive a visit in the browser itself. On connect we hand
+        # the stored ids back to the server, which owns the set from then on
+        # and re-persists it through the watchlist_persist output below. The
+        # message is sent even when nothing is stored -- the server waits for
+        # it before saving, so a fresh (empty) session cannot overwrite a
+        # real watchlist before the restore lands.
+        ui.tags.script(f"""
+            (function() {{
+                var KEY = {json.dumps(WATCHLIST_STORAGE_KEY)};
+                function restoreWatchlist() {{
+                    if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
+                    if (document.body.dataset.ucsdWatchlistRestored === '1') return;
+                    document.body.dataset.ucsdWatchlistRestored = '1';
+                    var ids = [];
+                    try {{
+                        var raw = localStorage.getItem(KEY);
+                        if (raw) {{
+                            var parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed)) {{
+                                ids = parsed.filter(function(v) {{ return typeof v === 'string'; }});
+                            }}
+                        }}
+                    }} catch (err) {{ ids = []; }}
+                    // sent as an object so an empty watchlist is still a
+                    // truthy, non-null payload the server acts on
+                    window.Shiny.setInputValue('watchlist_restore', {{ids: ids}}, {{priority: 'event'}});
+                }}
+                // Shiny's connect event reaches jQuery and native listeners
+                // differently across builds, so poll for a live connection
+                // instead of trusting any single hook to fire.
+                document.addEventListener('shiny:connected', restoreWatchlist);
+                var tries = 0;
+                var timer = window.setInterval(function() {{
+                    if (document.body && document.body.dataset.ucsdWatchlistRestored === '1') {{
+                        window.clearInterval(timer);
+                        return;
+                    }}
+                    var app = window.Shiny && window.Shiny.shinyapp;
+                    var live = app && (typeof app.isConnected !== 'function' || app.isConnected());
+                    if (document.body && live && window.Shiny.setInputValue) {{
+                        restoreWatchlist();
+                        window.clearInterval(timer);
+                        return;
+                    }}
+                    if (++tries > 600) {{ window.clearInterval(timer); }}
+                }}, 100);
+            }})();
+        """),
     ),
 
     ui.div({"id": "atlas-shell"},
@@ -5074,6 +5130,7 @@ app_ui = ui.page_fluid(
     ui.output_ui("d3_modal_trigger"),
     ui.output_ui("watchlist_lineup_data"),
     ui.output_ui("watchlist_lineup_sync"),
+    ui.output_ui("watchlist_persist"),
 )
 
 
@@ -5090,6 +5147,9 @@ def server(input, output, session):
     d3_sel    = reactive.Value(None)
     d3_dim    = reactive.Value(set())
     watchlist = reactive.Value(set())
+    # Flipped once the browser has handed back its stored watchlist, so the
+    # empty starting set is never written over what was already saved.
+    watchlist_restored = reactive.Value(False)
     radar_selected = reactive.Value([])
     radar_stat_selected = reactive.Value(DEFAULT_RADAR_STAT_KEYS)
     modal_req = reactive.Value(None)
@@ -5422,6 +5482,33 @@ def server(input, output, session):
             if pid not in selected:
                 selected.append(pid)
         radar_selected.set(selected)
+
+    # ── Watchlist restore from browser storage ────────────────────────────
+    @reactive.effect
+    @reactive.event(input.watchlist_restore)
+    def _restore_watchlist():
+        payload = input.watchlist_restore() or {}
+        stored = payload.get("ids") or [] if isinstance(payload, dict) else []
+        # Rosters change between data refreshes; drop ids that no longer
+        # resolve to a player rather than carrying dead cards forward.
+        restored = {pid for pid, *_ in watchlist_rows(stored)}
+        watchlist.set(restored)
+        sync_radar_selection(restored)
+        watchlist_restored.set(True)
+
+    @output
+    @render.ui
+    def watchlist_persist():
+        if not watchlist_restored.get():
+            return None
+        ids_json = json.dumps(sorted(watchlist.get())).replace("</", "<\\/")
+        return ui.tags.script(f"""
+        (function() {{
+          try {{
+            localStorage.setItem({json.dumps(WATCHLIST_STORAGE_KEY)}, JSON.stringify({ids_json}));
+          }} catch (err) {{}}
+        }})();
+        """)
 
     # ── Watchlist toggle ──────────────────────────────────────────────────
     @reactive.effect
@@ -6594,7 +6681,7 @@ def server(input, output, session):
         (function() {{
           const payload = {payload_json};
           try {{
-            localStorage.setItem('ucsd_watchlist_lineup_candidates_v1', JSON.stringify(payload));
+            localStorage.setItem({json.dumps(WATCHLIST_LINEUP_STORAGE_KEY)}, JSON.stringify(payload));
           }} catch (err) {{}}
           const frame = document.getElementById('ucsd-lineup-frame');
           if (frame && frame.contentWindow) {{
