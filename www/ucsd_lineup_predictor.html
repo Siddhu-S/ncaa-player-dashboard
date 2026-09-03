@@ -1955,6 +1955,8 @@ function playerRowHtml(id, p, opts) {
   if (opts.badge) badges.push(`<span style="font-size:8px; background:rgba(200,168,75,0.12); color:var(--gold-dim); border-radius:2px; padding:1px 4px; margin-left:4px;">${opts.badge}</span>`);
   if (p.lowSample) badges.push(`<span class="sample-badge" style="font-size:8px; border-radius:2px; padding:1px 4px; margin-left:4px;" title="${p.gp} GP · ${p.mpg} mpg — small sample, ratings unreliable">Low sample</span>`);
   const sub = [p.ht || '—', p.yr || '', p.pos || '', opts.school || ''].filter(Boolean).join(' · ');
+  const tsText = p.ts == null ? '—' : p.ts;
+  const prpgiText = p.prpgi == null ? '—' : `${p.prpgi > 0 ? '+' : ''}${p.prpgi}`;
   return `
     <div class="player-row" data-id="${id}" draggable="true" ondragstart="dragStart(event, '${id}')" ondragend="dragEnd(event)" onclick="openDrawer('${id}')">
       <div class="p-num" style="${numColor}">${p.num != null ? p.num : '–'}</div>
@@ -1965,7 +1967,7 @@ function playerRowHtml(id, p, opts) {
       </div>
       <div>
         <div class="p-bpr ${bprClass}">${bpr > 0 ? '+' : ''}${bpr}</div>
-        <div class="p-ts">TS% ${p.ts} · PRPG! ${p.prpgi > 0 ? '+' : ''}${p.prpgi}</div>
+        <div class="p-ts">TS% ${tsText} · PRPG! ${prpgiText}</div>
       </div>
       <button class="add-btn" onclick="event.stopPropagation(); addToNextSlot('${id}')" id="btn-${id}">+</button>
     </div>`;
@@ -1986,7 +1988,7 @@ function renderRosterPanel() {
 
   let html = '<div class="group-label">Returners</div>';
   html += returners.map(([id, p]) => playerRowHtml(id, p)).join('');
-  html += '<div class="group-label" style="color: var(--gold);">New Additions (2026 transfer portal, committed)</div>';
+  html += '<div class="group-label" style="color: var(--gold);">New Additions (2026-27 roster)</div>';
   html += newAdds.map(([id, p]) => playerRowHtml(id, p, { gold: true, badge: p.fromConf, school: p.priorSchool })).join('');
   html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — real available (uncommitted) transfers, ranked by BPM</div>';
   html += potential.map(([id, p]) => {
