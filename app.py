@@ -1091,6 +1091,376 @@ add_archetype_columns([
 ])
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# TRITON ZONE / TRITON WAR
+# ─────────────────────────────────────────────────────────────────────────
+#
+# The coaching staff defined a "Triton Zone": seven statistical targets a
+# player should clear to fit how UCSD wants to play. Triton WAR turns those
+# same seven targets into one 0-100 fit score so the whole country can be
+# ranked by them rather than only split into pass/fail.
+#
+# Each metric is stored in this app on its own scale (3P% as 0-1, TOV% as
+# 0-100, ...), so every metric carries the multiplier that puts it back into
+# the units the staff speaks in -- whole percentage points. Targets and
+# weights below are the defaults; both are adjustable in the tracker tab
+# because the staff expects to keep tuning them (eFG% in particular was added
+# after the fact).
+
+TRITON_ZONE_METRICS = [
+    {
+        "key": "efg",
+        "col": "efg",
+        "label": "eFG%",
+        "long": "Effective FG%",
+        "scale": 100.0,
+        "target": 50.0,
+        "kind": "pct",
+        "higher_is_better": True,
+        "weight": 20.0,
+        "input_min": 35.0,
+        "input_max": 70.0,
+        "step": 0.5,
+    },
+    {
+        "key": "three_pct",
+        "col": "tp",
+        "label": "3PT%",
+        "long": "Three-point percentage",
+        "scale": 100.0,
+        "target": 36.0,
+        "kind": "pct",
+        "higher_is_better": True,
+        "weight": 18.0,
+        "input_min": 25.0,
+        "input_max": 50.0,
+        "step": 0.5,
+    },
+    {
+        "key": "three_rate",
+        "col": "three_share",
+        "label": "3PA/FGA",
+        "long": "Three-point rate",
+        "scale": 100.0,
+        "target": 45.0,
+        "kind": "pct",
+        "higher_is_better": True,
+        "weight": 15.0,
+        "input_min": 10.0,
+        "input_max": 90.0,
+        "step": 1.0,
+    },
+    {
+        "key": "tov_pct",
+        "col": "tov_pct",
+        "label": "TOV%",
+        "long": "Turnover rate (lower is better)",
+        "scale": 1.0,
+        "target": 15.0,
+        "kind": "pct",
+        "higher_is_better": False,
+        "weight": 15.0,
+        "input_min": 5.0,
+        "input_max": 30.0,
+        "step": 0.5,
+    },
+    {
+        "key": "two_pct",
+        "col": "two_pct",
+        "label": "2PT%",
+        "long": "Two-point percentage",
+        "scale": 100.0,
+        "target": 55.0,
+        "kind": "pct",
+        "higher_is_better": True,
+        "weight": 12.0,
+        "input_min": 35.0,
+        "input_max": 75.0,
+        "step": 0.5,
+    },
+    {
+        "key": "drb_pct",
+        "col": "drb_pct",
+        "label": "DRB%",
+        "long": "Defensive rebound rate",
+        "scale": 1.0,
+        "target": 15.0,
+        "kind": "pct",
+        "higher_is_better": True,
+        "weight": 12.0,
+        "input_min": 2.0,
+        "input_max": 35.0,
+        "step": 0.5,
+    },
+    {
+        "key": "orb_pct",
+        "col": "orb_pct",
+        "label": "ORB%",
+        "long": "Offensive rebound rate",
+        "scale": 1.0,
+        "target": 6.0,
+        "kind": "pct",
+        "higher_is_better": True,
+        "weight": 8.0,
+        "input_min": 0.0,
+        "input_max": 20.0,
+        "step": 0.5,
+    },
+]
+TRITON_METRIC_BY_KEY = {metric["key"]: metric for metric in TRITON_ZONE_METRICS}
+TRITON_METRIC_KEYS = [metric["key"] for metric in TRITON_ZONE_METRICS]
+TRITON_DEFAULT_TARGETS = {metric["key"]: metric["target"] for metric in TRITON_ZONE_METRICS}
+TRITON_DEFAULT_WEIGHTS = {metric["key"]: metric["weight"] for metric in TRITON_ZONE_METRICS}
+
+# Special archetypes the staff wants filtered on top of the zone. Each entry
+# is an extra set of gates -- a player still carries a Triton WAR score, the
+# archetype only narrows who is eligible to appear.
+TRITON_SPECIAL_ARCHETYPES = {
+    "stretch_big": {
+        "label": "Stretch Big",
+        "note": "Size that still shoots it: 6'9\" or taller, 34%+ from three on a 40%+ three-point rate.",
+        "criteria": [
+            {
+                "key": "stretch_height",
+                "col": "heightIn",
+                "label": "Height",
+                "scale": 1.0,
+                "target": 81.0,
+                "higher_is_better": True,
+                "kind": "height",
+                "input_min": 72.0,
+                "input_max": 88.0,
+                "step": 1.0,
+            },
+            {
+                "key": "stretch_three_pct",
+                "col": "tp",
+                "label": "3PT%",
+                "scale": 100.0,
+                "target": 34.0,
+                "higher_is_better": True,
+                "kind": "pct",
+                "input_min": 20.0,
+                "input_max": 50.0,
+                "step": 0.5,
+            },
+            {
+                "key": "stretch_three_rate",
+                "col": "three_share",
+                "label": "3PA/FGA",
+                "scale": 100.0,
+                "target": 40.0,
+                "higher_is_better": True,
+                "kind": "pct",
+                "input_min": 10.0,
+                "input_max": 90.0,
+                "step": 1.0,
+            },
+        ],
+    },
+    "shooter": {
+        "label": "3PT Specialist",
+        "note": "Volume shooter: 65%+ of shots from three at better than 35%.",
+        "criteria": [
+            {
+                "key": "shooter_three_rate",
+                "col": "three_share",
+                "label": "3PA/FGA",
+                "scale": 100.0,
+                "target": 65.0,
+                "higher_is_better": True,
+                "kind": "pct",
+                "input_min": 30.0,
+                "input_max": 95.0,
+                "step": 1.0,
+            },
+            {
+                "key": "shooter_three_pct",
+                "col": "tp",
+                "label": "3PT%",
+                "scale": 100.0,
+                "target": 35.0,
+                "higher_is_better": True,
+                "kind": "pct",
+                "input_min": 20.0,
+                "input_max": 50.0,
+                "step": 0.5,
+            },
+        ],
+    },
+}
+TRITON_SPECIAL_CRITERIA = [
+    criterion
+    for archetype in TRITON_SPECIAL_ARCHETYPES.values()
+    for criterion in archetype["criteria"]
+]
+TRITON_SPECIAL_DEFAULT_TARGETS = {
+    criterion["key"]: criterion["target"] for criterion in TRITON_SPECIAL_CRITERIA
+}
+
+# Sub-scores are anchored on the target rather than on a raw percentile, so a
+# player who clears every target always lands in the same place no matter how
+# the rest of the country shoots that year. The spread below only controls how
+# fast a sub-score moves away from the target: one spread past it earns the
+# full 100, one and a half short of it bottoms out at 0.
+TRITON_SUBSCORE_AT_TARGET = 70.0
+TRITON_SPREAD_ABOVE = 1.0
+TRITON_SPREAD_BELOW = 1.5
+TRITON_SCORE_POOL_MIN_MPG = 10.0
+
+
+def _triton_metric_series(df, metric):
+    """Metric values converted into the whole-percentage-point units the staff
+    states targets in (3P% 0-1 becomes 36.0, TOV% is already 15.0)."""
+    values = pd.to_numeric(df.get(metric["col"]), errors="coerce")
+    if values is None:
+        return pd.Series(np.nan, index=df.index, dtype="float64")
+    return values.astype("float64") * float(metric["scale"])
+
+
+def _triton_spread(values):
+    """Robust half-interquantile spread, with a std fallback for thin columns."""
+    clean = pd.to_numeric(values, errors="coerce").dropna()
+    if clean.empty:
+        return 1.0
+    spread = (clean.quantile(0.84) - clean.quantile(0.16)) / 2.0
+    if not np.isfinite(spread) or spread <= 0:
+        spread = float(clean.std(ddof=0))
+    if not np.isfinite(spread) or spread <= 0:
+        return 1.0
+    return float(spread)
+
+
+def build_triton_spreads(df):
+    """One spread per metric, measured once over the rotation-level D-I pool so
+    the scale of a score does not move when the user filters the table."""
+    mpg = pd.to_numeric(df.get("mpg"), errors="coerce")
+    pool = df[mpg.fillna(0) >= TRITON_SCORE_POOL_MIN_MPG] if mpg is not None else df
+    if pool.empty:
+        pool = df
+    return {
+        metric["key"]: _triton_spread(_triton_metric_series(pool, metric))
+        for metric in TRITON_ZONE_METRICS
+    }
+
+
+def triton_subscore(values, target, spread, higher_is_better):
+    """0-100 fit on one metric. Hitting the target is worth 70; a full spread
+    beyond it reaches 100, and one and a half spreads short of it reaches 0.
+    The curve is continuous at the target, so nudging a threshold nudges the
+    score instead of flipping it."""
+    numeric = pd.to_numeric(values, errors="coerce").astype("float64")
+    spread = float(spread) if np.isfinite(spread) and spread > 0 else 1.0
+    z = (numeric - float(target)) / spread
+    if not higher_is_better:
+        z = -z
+    above = TRITON_SUBSCORE_AT_TARGET + (100.0 - TRITON_SUBSCORE_AT_TARGET) * np.clip(
+        z / TRITON_SPREAD_ABOVE, 0.0, 1.0
+    )
+    below = TRITON_SUBSCORE_AT_TARGET * np.clip(1.0 + z / TRITON_SPREAD_BELOW, 0.0, 1.0)
+    scored = np.where(z >= 0, above, below)
+    return pd.Series(np.where(np.isnan(z), np.nan, scored), index=numeric.index, dtype="float64")
+
+
+def compute_triton_frame(df, targets=None, weights=None, spreads=None):
+    """Per-metric values, pass flags and sub-scores plus the weighted Triton WAR
+    for every row of df. Returned as its own frame so callers can either attach
+    the columns or use them for a one-off ranking."""
+    targets = {**TRITON_DEFAULT_TARGETS, **(targets or {})}
+    weights = {**TRITON_DEFAULT_WEIGHTS, **(weights or {})}
+    spreads = spreads or TRITON_METRIC_SPREADS
+
+    out = pd.DataFrame(index=df.index)
+    weighted_total = pd.Series(0.0, index=df.index, dtype="float64")
+    weight_total = 0.0
+    passes = pd.Series(0, index=df.index, dtype="int64")
+    zone = pd.Series(True, index=df.index)
+
+    for metric in TRITON_ZONE_METRICS:
+        key = metric["key"]
+        values = _triton_metric_series(df, metric)
+        target = float(targets.get(key, metric["target"]))
+        sub = triton_subscore(values, target, spreads.get(key, 1.0), metric["higher_is_better"])
+        if metric["higher_is_better"]:
+            ok = values >= target
+        else:
+            ok = values <= target
+        ok = ok.fillna(False)
+        weight = max(0.0, float(weights.get(key, metric["weight"])))
+        out[f"triton_val_{key}"] = values
+        out[f"triton_sub_{key}"] = sub
+        out[f"triton_ok_{key}"] = ok
+        weighted_total = weighted_total.add(sub.fillna(0.0) * weight, fill_value=0.0)
+        weight_total += weight
+        passes = passes + ok.astype("int64")
+        zone = zone & ok
+
+    out["triton_checks_passed"] = passes
+    out["triton_checks_total"] = len(TRITON_ZONE_METRICS)
+    out["triton_zone"] = zone
+    if weight_total > 0:
+        out["triton_war"] = (weighted_total / weight_total).clip(0, 100)
+    else:
+        out["triton_war"] = pd.Series(np.nan, index=df.index, dtype="float64")
+    return out
+
+
+def compute_triton_special(df, special_targets=None):
+    """Pass flags for the Stretch Big / 3PT Specialist gates."""
+    special_targets = {**TRITON_SPECIAL_DEFAULT_TARGETS, **(special_targets or {})}
+    out = pd.DataFrame(index=df.index)
+    for arch_key, archetype in TRITON_SPECIAL_ARCHETYPES.items():
+        meets = pd.Series(True, index=df.index)
+        for criterion in archetype["criteria"]:
+            values = _triton_metric_series(df, criterion)
+            target = float(special_targets.get(criterion["key"], criterion["target"]))
+            ok = (values >= target) if criterion["higher_is_better"] else (values <= target)
+            ok = ok.fillna(False)
+            out[f"triton_ok_{criterion['key']}"] = ok
+            meets = meets & ok
+        out[f"triton_is_{arch_key}"] = meets
+    return out
+
+
+TRITON_METRIC_SPREADS = build_triton_spreads(d1_df)
+
+
+def add_triton_columns(df):
+    """Attach the default-threshold Triton WAR columns so a player profile can
+    show the score without the tracker tab being open."""
+    frame = compute_triton_frame(df)
+    for col in frame.columns:
+        df[col] = frame[col]
+    special = compute_triton_special(df)
+    for col in special.columns:
+        df[col] = special[col]
+
+
+add_triton_columns(d1_df)
+
+
+def triton_format_value(metric, value):
+    num = _as_float(value)
+    if not np.isfinite(num):
+        return "—"
+    if metric.get("kind") == "height":
+        return height_str(int(round(num)))
+    if metric.get("kind") == "pct":
+        return f"{num:.1f}%"
+    return f"{num:.1f}"
+
+
+def triton_format_target(metric, target):
+    num = _as_float(target)
+    if not np.isfinite(num):
+        return "—"
+    if metric.get("kind") == "height":
+        return height_str(int(round(num)))
+    if metric.get("kind") == "pct":
+        return f"{num:g}%"
+    return f"{num:g}"
+
+
 def archetype_label(value):
     return ARCHETYPE_SHORT_LABEL.get(value, value)
 
@@ -1204,6 +1574,278 @@ def historical_slider_range(column: str, step: float):
     lo = math.floor(vals.min() / step) * step
     hi = math.ceil(vals.max() / step) * step
     return (float(lo), float(hi))
+
+
+
+
+TRITON_ARCHETYPE_FILTERS = {
+    "all": "All players",
+    "zone": "Triton Zone only",
+    "stretch_big": TRITON_SPECIAL_ARCHETYPES["stretch_big"]["label"],
+    "shooter": TRITON_SPECIAL_ARCHETYPES["shooter"]["label"],
+}
+# The board renders one table row per player and the public site runs this in
+# Pyodide, so the length is capped -- filters, not an unbounded board, are how
+# you find one specific player.
+TRITON_TABLE_LIMITS = {
+    "25": "Top 25",
+    "50": "Top 50",
+    "100": "Top 100",
+    "250": "Top 250",
+    "500": "Top 500",
+}
+TRITON_DEFAULT_MIN_MPG = 10.0
+TRITON_DEFAULT_MIN_GP = 5
+
+
+def triton_threshold_field(metric):
+    return ui.div(
+        {"class": "triton-threshold-field"},
+        ui.div(
+            ui.span(metric["label"], class_="triton-threshold-name"),
+            ui.span(metric["long"], class_="triton-threshold-hint"),
+            class_="triton-threshold-head",
+        ),
+        ui.input_numeric(
+            f"triton_target_{metric['key']}",
+            None,
+            value=float(metric["target"]),
+            min=float(metric["input_min"]),
+            max=float(metric["input_max"]),
+            step=float(metric["step"]),
+        ),
+    )
+
+
+def triton_weight_field(metric):
+    return ui.div(
+        {"class": "triton-weight-field"},
+        ui.div(
+            ui.span(metric["label"], class_="triton-threshold-name"),
+            ui.output_text(f"triton_weight_share_{metric['key']}", inline=True),
+            class_="triton-threshold-head",
+        ),
+        ui.input_slider(
+            f"triton_weight_{metric['key']}",
+            None,
+            min=0,
+            max=40,
+            value=float(metric["weight"]),
+            step=1,
+        ),
+    )
+
+
+def triton_special_field(criterion):
+    return ui.div(
+        {"class": "triton-threshold-field"},
+        ui.div(
+            ui.span(criterion["label"], class_="triton-threshold-name"),
+            ui.span(
+                "inches" if criterion.get("kind") == "height" else "percent",
+                class_="triton-threshold-hint",
+            ),
+            class_="triton-threshold-head",
+        ),
+        ui.input_numeric(
+            f"triton_target_{criterion['key']}",
+            None,
+            value=float(criterion["target"]),
+            min=float(criterion["input_min"]),
+            max=float(criterion["input_max"]),
+            step=float(criterion["step"]),
+        ),
+    )
+
+
+def make_triton_tab():
+    conf_choices = {conf: conf for conf in sorted(d1_df["confName"].dropna().unique())}
+    team_choices = {team: team for team in sorted(d1_df["team"].dropna().unique())}
+    return ui.div(
+        {"id": "triton-tab", "class": "tab-panel"},
+        ui.div(
+            {"class": "triton-shell"},
+            ui.div(
+                {"class": "triton-header-card"},
+                ui.div("Triton WAR Tracker", class_="triton-title"),
+                ui.div(
+                    "Every D-I player scored against the staff's Triton Zone targets and ranked "
+                    "by the weighted fit. Hitting a target is worth 70 on that metric, clearing it "
+                    "comfortably earns up to 100, so the board separates players who merely qualify "
+                    "from players who live in the zone.",
+                    class_="triton-lede",
+                ),
+                ui.div(
+                    {"class": "triton-filter-row"},
+                    ui.div(
+                        {"class": "triton-filter-field"},
+                        ui.div("Search player", class_="triton-filter-title"),
+                        ui.input_text("triton_q", None, placeholder="Search a player..."),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field"},
+                        ui.div("Conference", class_="triton-filter-title"),
+                        ui.input_selectize(
+                            "triton_conf",
+                            None,
+                            choices=conf_choices,
+                            selected=[],
+                            multiple=True,
+                            options={"placeholder": "  Any conference",
+                                     "plugins": ["remove_button"]},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field"},
+                        ui.div("Team", class_="triton-filter-title"),
+                        ui.input_selectize(
+                            "triton_team",
+                            None,
+                            choices=team_choices,
+                            selected=[],
+                            multiple=True,
+                            options={"placeholder": "  Any team",
+                                     "plugins": ["remove_button"]},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field"},
+                        ui.div("Pos", class_="triton-filter-title"),
+                        ui.input_selectize(
+                            "triton_pos",
+                            None,
+                            choices={pos: pos for pos in POSITIONS},
+                            selected=[],
+                            multiple=True,
+                            options={"placeholder": "  Any position",
+                                     "plugins": ["remove_button"]},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field"},
+                        ui.div("Class", class_="triton-filter-title"),
+                        ui.input_selectize(
+                            "triton_cls",
+                            None,
+                            choices={cls: cls for cls in CLASSES},
+                            selected=[],
+                            multiple=True,
+                            options={"placeholder": "  Any class",
+                                     "plugins": ["remove_button"]},
+                        ),
+                    ),
+                ),
+                ui.div(
+                    {"class": "triton-filter-row triton-filter-row--second"},
+                    ui.div(
+                        {"class": "triton-filter-field triton-filter-field--wide"},
+                        ui.div("Archetype filter", class_="triton-filter-title"),
+                        ui.input_radio_buttons(
+                            "triton_archetype",
+                            None,
+                            choices=TRITON_ARCHETYPE_FILTERS,
+                            selected="all",
+                            inline=True,
+                        ),
+                        ui.input_checkbox(
+                            "triton_require_zone",
+                            "Archetype must also clear the full Triton Zone",
+                            value=False,
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field triton-filter-field--slider"},
+                        ui.div("Minutes per game minimum", class_="triton-filter-title"),
+                        ui.input_slider(
+                            "triton_min_mpg", None,
+                            min=0, max=35, value=TRITON_DEFAULT_MIN_MPG, step=0.5,
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field triton-filter-field--slider"},
+                        ui.div("Games played minimum", class_="triton-filter-title"),
+                        ui.input_slider(
+                            "triton_min_gp", None,
+                            min=0, max=35, value=TRITON_DEFAULT_MIN_GP, step=1,
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field triton-filter-field--slider"},
+                        ui.div("Zone checks cleared minimum", class_="triton-filter-title"),
+                        ui.input_slider(
+                            "triton_min_checks", None,
+                            min=0, max=len(TRITON_ZONE_METRICS), value=0, step=1,
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "triton-filter-field"},
+                        ui.div("Board length", class_="triton-filter-title"),
+                        ui.input_select(
+                            "triton_limit", None,
+                            choices=TRITON_TABLE_LIMITS, selected="100",
+                        ),
+                    ),
+                ),
+                ui.tags.details(
+                    {"class": "triton-more"},
+                    ui.tags.summary("Triton Zone thresholds"),
+                    ui.div(
+                        "The staff's targets. Every one is adjustable — a player clears a metric at "
+                        "the target and scores higher the further past it they get.",
+                        class_="triton-more-note",
+                    ),
+                    ui.div(
+                        {"class": "triton-threshold-grid"},
+                        *[triton_threshold_field(metric) for metric in TRITON_ZONE_METRICS],
+                    ),
+                    ui.div("Archetype criteria", class_="triton-more-subhead"),
+                    *[
+                        ui.div(
+                            ui.div(
+                                ui.span(archetype["label"], class_="triton-more-arch"),
+                                ui.span(archetype["note"], class_="triton-threshold-hint"),
+                                class_="triton-more-archhead",
+                            ),
+                            ui.div(
+                                {"class": "triton-threshold-grid"},
+                                *[triton_special_field(c) for c in archetype["criteria"]],
+                            ),
+                        )
+                        for archetype in TRITON_SPECIAL_ARCHETYPES.values()
+                    ],
+                    ui.input_action_button(
+                        "triton_reset_thresholds", "Reset thresholds", class_="triton-reset-btn"
+                    ),
+                ),
+                ui.tags.details(
+                    {"class": "triton-more"},
+                    ui.tags.summary("Triton WAR weights"),
+                    ui.div(
+                        "How much each metric counts toward the score. Weights are normalised, so "
+                        "only their sizes relative to each other matter — the percentage beside each "
+                        "label is its real share of the score.",
+                        class_="triton-more-note",
+                    ),
+                    ui.div(
+                        {"class": "triton-threshold-grid triton-threshold-grid--weights"},
+                        *[triton_weight_field(metric) for metric in TRITON_ZONE_METRICS],
+                    ),
+                    ui.input_action_button(
+                        "triton_reset_weights", "Reset weights", class_="triton-reset-btn"
+                    ),
+                ),
+            ),
+            ui.div(
+                {"class": "triton-results-head"},
+                ui.output_text("triton_results_count"),
+                ui.div(
+                    "Click a row to open the player profile. Green cells clear the target.",
+                    class_="triton-results-note",
+                ),
+            ),
+            ui.output_ui("triton_table_ui"),
+        ),
+    )
 
 
 def make_historical_beta_tab():
@@ -2250,6 +2892,79 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                 ),
             )
         )
+    triton_panel = []
+    if division_label == "D-I" and "triton_war" in row.index:
+        triton_war_value = _as_float(row.get("triton_war"))
+        triton_passed = int(row.get("triton_checks_passed", 0) or 0)
+        triton_total = int(row.get("triton_checks_total", len(TRITON_ZONE_METRICS)) or len(TRITON_ZONE_METRICS))
+        triton_panel.append(
+            ui.div(
+                ui.span("Triton WAR", class_="arch-score-name"),
+                ui.span(
+                    f"{triton_war_value:.1f}" if np.isfinite(triton_war_value) else "N/A",
+                    class_="arch-score-value",
+                ),
+                class_="arch-score-head",
+            )
+        )
+        triton_panel.append(
+            ui.div(
+                {"class": "arch-score-track"},
+                ui.div({
+                    "class": "arch-score-fill",
+                    "style": (
+                        f"width:{min(100.0, max(0.0, triton_war_value)):.1f}%;background:var(--accent);"
+                        if np.isfinite(triton_war_value)
+                        else "width:0;"
+                    ),
+                }),
+            )
+        )
+        triton_panel.append(
+            ui.div(
+                ui.tags.b("Zone checks: "),
+                f"{triton_passed} of {triton_total} cleared at the staff defaults.",
+                class_="qual-note",
+            )
+        )
+        triton_panel.append(
+            ui.div(
+                {"class": "triton-modal-grid"},
+                *[
+                    ui.div(
+                        {"class": "triton-modal-cell"},
+                        ui.div(metric["label"], class_="k"),
+                        ui.div(
+                            triton_format_value(metric, row.get(f"triton_val_{metric['key']}")),
+                            class_=(
+                                "v is-pass"
+                                if bool(row.get(f"triton_ok_{metric['key']}", False))
+                                else "v is-miss"
+                            ),
+                        ),
+                        ui.div(
+                            ("\u2265 " if metric["higher_is_better"] else "\u2264 ")
+                            + triton_format_target(metric, metric["target"]),
+                            class_="s",
+                        ),
+                    )
+                    for metric in TRITON_ZONE_METRICS
+                ],
+            )
+        )
+        triton_arch_hits = [
+            archetype["label"]
+            for arch_key, archetype in TRITON_SPECIAL_ARCHETYPES.items()
+            if bool(row.get(f"triton_is_{arch_key}", False))
+        ]
+        triton_panel.append(
+            ui.div(
+                ui.tags.b("Archetype: "),
+                ", ".join(triton_arch_hits) if triton_arch_hits else "No special archetype criteria met.",
+                class_="qual-note",
+            )
+        )
+
     qualification_notes = [
         ("General", row["qual_general_reason"]),
         ("PG", row["qual_pg_reason"]),
@@ -2471,6 +3186,11 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                       bio_item("Min/G",    f"{row['mpg']:.1f}", mono=True),
                       bio_item("BPM",      f"{bpm_value:.1f}" if pd.notna(bpm_value) else "N/A", mono=True),
                       bio_item("PORPAG",   f"{porpag_value:.2f}" if pd.notna(porpag_value) else "N/A", mono=True)),
+               ui.div(
+                   ui.div("Triton Zone", class_="col-title"),
+                   *triton_panel,
+                   class_="arch-score-panel",
+               ) if triton_panel else ui.div(),
                ui.div(
                    ui.div("Archetype", class_="col-title"),
                    ui.div(
@@ -3610,6 +4330,7 @@ app_ui = ui.page_fluid(
             .tab-btn.active-wl { color:#7cc47a;         border-bottom-color:#7cc47a; }
             .tab-btn.active-ucsd { color:#8a5f0e;       border-bottom-color:#8a5f0e; }
             .tab-btn.active-hist { color:#c9d6f0;       border-bottom-color:#c9d6f0; }
+            .tab-btn.active-triton { color:#c8a84b;     border-bottom-color:#c8a84b; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
             .build-stamp {
                 display:inline-flex; align-items:center; width:fit-content;
@@ -4043,7 +4764,8 @@ app_ui = ui.page_fluid(
             .tab-panel.active {
                 flex:1; height:auto; overflow:hidden;
             }
-            #hist-tab.tab-panel.active {
+            #hist-tab.tab-panel.active,
+            #triton-tab.tab-panel.active {
                 overflow-y:auto;
             }
 
@@ -4212,6 +4934,463 @@ app_ui = ui.page_fluid(
             }
 
             /* ── Historical beta tab ── */
+
+            /* ── Triton WAR tracker ────────────────────────────── */
+            .triton-shell {
+                padding:26px 28px 34px;
+                display:flex;
+                flex-direction:column;
+                gap:18px;
+            }
+            .triton-header-card,
+            .triton-table-card {
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+            }
+            .triton-header-card {
+                padding:24px 24px 18px;
+            }
+            .triton-title {
+                font-family:var(--serif);
+                font-size:44px;
+                line-height:1;
+                color:var(--ink);
+                margin-bottom:10px;
+            }
+            .triton-lede {
+                color:var(--ink-2);
+                font-size:13px;
+                line-height:1.6;
+                max-width:880px;
+                margin-bottom:20px;
+            }
+            .triton-filter-row {
+                display:grid;
+                grid-template-columns:repeat(5, minmax(0, 1fr));
+                gap:18px 22px;
+                align-items:start;
+            }
+            .triton-filter-row--second {
+                margin-top:16px;
+                padding-top:16px;
+                border-top:1px solid var(--rule);
+                grid-template-columns:minmax(0,1.7fr) repeat(3, minmax(0,1fr)) minmax(0,.7fr);
+            }
+            .triton-filter-title,
+            .triton-results-head,
+            .triton-table th {
+                font-family:var(--sans);
+                text-transform:uppercase;
+                letter-spacing:.10em;
+            }
+            .triton-filter-title {
+                color:var(--ink-2);
+                font-size:11px;
+                font-weight:700;
+                margin-bottom:8px;
+            }
+            .triton-header-card .shiny-input-container {
+                margin-bottom:0;
+                width:100%;
+            }
+            .triton-header-card input[type="text"],
+            .triton-header-card input[type="number"],
+            .triton-header-card select {
+                background:rgba(10,16,27,.7) !important;
+                border:1px solid var(--rule) !important;
+                color:var(--ink) !important;
+                border-radius:0 !important;
+                min-height:38px !important;
+                box-shadow:none !important;
+                font-family:var(--mono);
+                font-size:12px;
+            }
+            .triton-header-card .selectize-control {
+                margin-bottom:0;
+                padding:0 !important;
+                background:transparent !important;
+                box-shadow:none !important;
+                width:100% !important;
+            }
+            .triton-header-card .selectize-control .selectize-input {
+                background:rgba(10,16,27,.7) !important;
+                border:1px solid var(--rule) !important;
+                color:var(--ink) !important;
+                border-radius:0 !important;
+                min-height:38px !important;
+                box-shadow:none !important;
+                padding:6px 10px !important;
+                font-size:12px;
+                display:flex;
+                align-items:center;
+                flex-wrap:wrap;
+                gap:5px;
+            }
+            /* Selectize renders its own type="text" input inside the control;
+               without this it picks up the boxed field styling above and draws
+               a second border inside the first. */
+            .triton-header-card .selectize-input input[type="text"] {
+                background:transparent !important;
+                border:none !important;
+                min-height:0 !important;
+                height:auto !important;
+                padding:0 !important;
+                color:var(--ink) !important;
+            }
+            .triton-header-card .selectize-input > .item {
+                background:rgba(200,168,75,.16) !important;
+                border:1px solid rgba(200,168,75,.4) !important;
+                color:var(--ink) !important;
+                border-radius:2px;
+                padding:1px 6px !important;
+            }
+            .triton-header-card input::placeholder {
+                color:var(--ink-3) !important;
+                opacity:1;
+            }
+            .triton-header-card .selectize-input > input::placeholder {
+                color:var(--ink-3) !important;
+                opacity:1;
+            }
+            .triton-header-card .selectize-dropdown {
+                background:#111a2b !important;
+                border:1px solid var(--rule) !important;
+                color:var(--ink) !important;
+                font-size:12px;
+            }
+            .triton-header-card .selectize-dropdown .active {
+                background:rgba(200,168,75,.18) !important;
+                color:var(--ink) !important;
+            }
+            .triton-header-card .irs--shiny .irs-bar,
+            .triton-header-card .irs--shiny .irs-single,
+            .triton-header-card .irs--shiny .irs-from,
+            .triton-header-card .irs--shiny .irs-to {
+                background:var(--accent) !important;
+                border-color:var(--accent) !important;
+                color:#0f1623 !important;
+            }
+            .triton-header-card .irs--shiny .irs-line {
+                background:var(--rule-2) !important;
+            }
+            .triton-header-card .irs--shiny .irs-min,
+            .triton-header-card .irs--shiny .irs-max,
+            .triton-header-card .irs--shiny .irs-grid-text {
+                color:var(--ink-3) !important;
+                background:transparent !important;
+            }
+            .triton-filter-field--wide .radio-inline,
+            .triton-filter-field--wide .shiny-options-group label {
+                color:var(--ink-2);
+                font-size:12px;
+                margin-right:14px;
+            }
+            .triton-filter-field--wide .checkbox label {
+                color:var(--ink-3);
+                font-size:11px;
+                display:flex;
+                align-items:center;
+                gap:7px;
+                margin-top:8px;
+            }
+            .triton-more {
+                margin-top:18px;
+                border-top:1px solid var(--rule);
+                padding-top:14px;
+            }
+            .triton-more > summary {
+                cursor:pointer;
+                color:var(--accent);
+                font-family:var(--sans);
+                font-size:11px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                list-style:none;
+            }
+            .triton-more > summary::before {
+                content:"+ ";
+                font-family:var(--mono);
+            }
+            .triton-more[open] > summary::before {
+                content:"− ";
+            }
+            .triton-more-note {
+                color:var(--ink-3);
+                font-size:12px;
+                line-height:1.55;
+                margin:10px 0 14px;
+                max-width:820px;
+            }
+            .triton-more-subhead {
+                margin:22px 0 8px;
+                color:var(--ink-2);
+                font-family:var(--sans);
+                font-size:11px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+            }
+            .triton-more-archhead {
+                display:flex;
+                align-items:baseline;
+                gap:10px;
+                flex-wrap:wrap;
+                margin:12px 0 8px;
+            }
+            .triton-more-arch {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:17px;
+            }
+            .triton-threshold-grid {
+                display:grid;
+                grid-template-columns:repeat(auto-fill, minmax(170px, 1fr));
+                gap:14px 20px;
+            }
+            .triton-threshold-grid--weights {
+                grid-template-columns:repeat(auto-fill, minmax(210px, 1fr));
+            }
+            /* Hints wrap to two lines at some widths, so let the grid row
+               stretch and push every input to the bottom of its cell instead
+               of leaving one field sitting lower than its neighbours. */
+            .triton-threshold-field,
+            .triton-weight-field {
+                display:flex;
+                flex-direction:column;
+                height:100%;
+            }
+            .triton-threshold-field .shiny-input-container,
+            .triton-weight-field .shiny-input-container {
+                margin-top:auto;
+            }
+            .triton-threshold-head {
+                display:flex;
+                align-items:baseline;
+                align-content:flex-start;
+                gap:8px;
+                margin-bottom:6px;
+                flex-wrap:wrap;
+            }
+            .triton-threshold-name {
+                color:var(--ink);
+                font-family:var(--mono);
+                font-size:12px;
+                font-weight:500;
+            }
+            .triton-threshold-hint {
+                color:var(--ink-3);
+                font-size:11px;
+            }
+            .triton-weight-field .shiny-text-output {
+                color:var(--accent);
+                font-family:var(--mono);
+                font-size:11px;
+            }
+            .triton-reset-btn {
+                margin-top:18px;
+                background:transparent;
+                color:var(--ink-2);
+                border:1px solid var(--rule-2);
+                border-radius:999px;
+                padding:7px 16px;
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                cursor:pointer;
+            }
+            .triton-reset-btn:hover {
+                color:var(--accent);
+                border-color:var(--accent);
+            }
+            .triton-results-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:baseline;
+                gap:16px;
+                flex-wrap:wrap;
+                color:var(--ink-2);
+                font-size:11px;
+                font-weight:700;
+            }
+            .triton-results-note {
+                color:var(--ink-3);
+                font-weight:400;
+                letter-spacing:.04em;
+                text-transform:none;
+                font-size:12px;
+            }
+            .triton-table-card {
+                overflow-x:auto;
+            }
+            .triton-table {
+                width:100%;
+                border-collapse:collapse;
+                min-width:1280px;
+            }
+            .triton-table th,
+            .triton-table td {
+                padding:11px 12px;
+                border-bottom:1px solid rgba(89,113,154,.18);
+                text-align:left;
+                vertical-align:middle;
+                font-family:var(--mono);
+                font-size:12px;
+                color:var(--ink-2);
+                white-space:nowrap;
+            }
+            .triton-table th {
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                color:var(--ink-2);
+                background:rgba(14,20,33,.94);
+                position:sticky;
+                top:0;
+                z-index:1;
+            }
+            .triton-table th button {
+                background:none;
+                border:none;
+                color:inherit;
+                font:inherit;
+                letter-spacing:inherit;
+                text-transform:inherit;
+                cursor:pointer;
+                padding:0;
+            }
+            .triton-table tbody tr {
+                cursor:pointer;
+                transition:background .14s ease;
+            }
+            .triton-table tbody tr:hover {
+                background:rgba(73,106,164,.12);
+            }
+            .triton-table tbody tr.is-selected {
+                background:rgba(200,168,75,.12);
+            }
+            .triton-col-rank {
+                width:46px;
+                color:var(--ink-3);
+            }
+            .triton-col-war {
+                min-width:96px;
+            }
+            .triton-table-player {
+                font-family:var(--serif);
+                font-size:16px;
+                color:var(--ink);
+            }
+            .triton-table-meta {
+                margin-top:3px;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:10px;
+            }
+            .triton-war-value {
+                color:var(--accent);
+                font-size:14px;
+                font-weight:500;
+            }
+            .triton-war-track {
+                margin-top:4px;
+                height:4px;
+                width:84px;
+                background:var(--rule-2);
+            }
+            .triton-war-fill {
+                height:100%;
+                background:var(--accent);
+            }
+            .triton-zone-badge {
+                display:inline-block;
+                padding:2px 7px;
+                border-radius:999px;
+                border:1px solid var(--rule-2);
+                color:var(--ink-3);
+                font-size:11px;
+            }
+            .triton-zone-badge.is-full {
+                border-color:#4f9d69;
+                background:rgba(79,157,105,.16);
+                color:#8fd6a6;
+            }
+            .triton-metric {
+                display:inline-block;
+                padding:2px 6px;
+                border-radius:3px;
+            }
+            .triton-metric.is-pass {
+                background:rgba(79,157,105,.18);
+                color:#8fd6a6;
+            }
+            .triton-metric.is-miss {
+                color:var(--ink-3);
+            }
+            .triton-arch-tags {
+                display:flex;
+                gap:5px;
+                flex-wrap:wrap;
+            }
+            .triton-arch-tag {
+                display:inline-block;
+                padding:2px 7px;
+                border-radius:999px;
+                border:1px solid var(--accent);
+                color:var(--accent);
+                font-size:10px;
+                letter-spacing:.04em;
+            }
+            .triton-arch-tag.is-warn {
+                border-color:rgba(200,168,75,.45);
+                color:#f0d58a;
+                background:rgba(200,168,75,.12);
+            }
+            .triton-modal-grid {
+                display:grid;
+                grid-template-columns:repeat(auto-fit, minmax(58px, 1fr));
+                gap:8px;
+                margin:12px 0 10px;
+            }
+            .triton-modal-cell {
+                border:1px solid var(--rule);
+                background:rgba(10,16,27,.5);
+                padding:7px 8px;
+            }
+            .triton-modal-cell .k {
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:9px;
+                font-weight:700;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+            }
+            .triton-modal-cell .v {
+                margin-top:3px;
+                font-family:var(--mono);
+                font-size:13px;
+                color:var(--ink-2);
+            }
+            .triton-modal-cell .v.is-pass {
+                color:#8fd6a6;
+            }
+            .triton-modal-cell .v.is-miss {
+                color:var(--ink-3);
+            }
+            .triton-modal-cell .s {
+                margin-top:2px;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:9px;
+            }
+            .triton-empty {
+                padding:22px 24px;
+                color:var(--ink-3);
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+            }
             .historical-shell {
                 padding:26px 28px 34px;
                 display:flex;
@@ -4714,6 +5893,28 @@ app_ui = ui.page_fluid(
                 font-size:18px;
             }
             @media (max-width: 1180px) {
+                .triton-filter-row,
+                .triton-filter-row--second {
+                    grid-template-columns:repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (max-width: 760px) {
+                .triton-shell {
+                    padding:18px 16px 24px;
+                }
+                .triton-title {
+                    font-size:32px;
+                }
+                .triton-filter-row,
+                .triton-filter-row--second {
+                    grid-template-columns:minmax(0, 1fr);
+                }
+                .triton-results-head {
+                    flex-direction:column;
+                    align-items:flex-start;
+                }
+            }
+            @media (max-width: 1180px) {
                 .historical-filter-field,
                 .historical-filter-field--slider,
                 .historical-filter-field--sm {
@@ -4946,7 +6147,7 @@ app_ui = ui.page_fluid(
                     p.classList.remove('active');
                 });
                 document.querySelectorAll('.tab-btn').forEach(function(b) {
-                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist');
+                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist','active-triton');
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
@@ -5077,6 +6278,9 @@ app_ui = ui.page_fluid(
                ui.tags.button("Historical Players (beta)", id="btn-hist", class_="tab-btn",
                               onclick="switchTab('hist')"),
                ui.div({"class": "tab-sep"}),
+               ui.tags.button("Triton WAR", id="btn-triton", class_="tab-btn",
+                              onclick="switchTab('triton')"),
+               ui.div({"class": "tab-sep"}),
                ui.tags.button("Archetype Guide", id="btn-info", class_="tab-btn",
                               onclick="switchTab('info')"),
                ui.div({"class": "tab-sep"}),
@@ -5106,6 +6310,8 @@ app_ui = ui.page_fluid(
                           make_plot_area("d3"))),
 
             make_historical_beta_tab(),
+
+            make_triton_tab(),
 
             ui.div({"id": "info-tab", "class": "tab-panel"},
                    make_explainer_page()),
@@ -6283,6 +7489,324 @@ def server(input, output, session):
         else:
             hist_sort_col.set(col)
             hist_sort_dir.set("asc" if col == "player_name" else "desc")
+
+    # ── Triton WAR tracker ────────────────────────────────────────────────
+    triton_sort_col = reactive.Value("triton_war")
+    triton_sort_dir = reactive.Value("desc")
+    triton_selected = reactive.Value(None)
+
+    def _triton_numeric_input(input_id, fallback):
+        try:
+            value = input[input_id]()
+        except Exception:
+            return float(fallback)
+        num = _as_float(value)
+        return float(num) if np.isfinite(num) else float(fallback)
+
+    @reactive.calc
+    def triton_targets():
+        return {
+            metric["key"]: _triton_numeric_input(f"triton_target_{metric['key']}", metric["target"])
+            for metric in TRITON_ZONE_METRICS
+        }
+
+    @reactive.calc
+    def triton_special_targets():
+        return {
+            criterion["key"]: _triton_numeric_input(
+                f"triton_target_{criterion['key']}", criterion["target"]
+            )
+            for criterion in TRITON_SPECIAL_CRITERIA
+        }
+
+    @reactive.calc
+    def triton_weights():
+        weights = {
+            metric["key"]: max(
+                0.0, _triton_numeric_input(f"triton_weight_{metric['key']}", metric["weight"])
+            )
+            for metric in TRITON_ZONE_METRICS
+        }
+        # Every weight dragged to zero would make the score undefined, so fall
+        # back to the staff's defaults rather than showing an empty board.
+        if sum(weights.values()) <= 0:
+            return dict(TRITON_DEFAULT_WEIGHTS)
+        return weights
+
+    @reactive.calc
+    def triton_scored():
+        frame = compute_triton_frame(
+            d1_df, targets=triton_targets(), weights=triton_weights()
+        )
+        special = compute_triton_special(d1_df, special_targets=triton_special_targets())
+        keep = [
+            "id", "name", "team", "conf", "confName", "pos", "cls",
+            "heightIn", "mpg", "gp", "low_sample_size",
+        ]
+        base = d1_df[[col for col in keep if col in d1_df.columns]].copy()
+        return pd.concat([base, frame, special], axis=1)
+
+    @reactive.calc
+    def triton_filtered():
+        df = triton_scored()
+
+        query = str(input.triton_q() or "").strip().lower()
+        if query:
+            df = df[
+                df["name"].str.lower().str.contains(query, na=False)
+                | df["team"].str.lower().str.contains(query, na=False)
+            ]
+
+        confs = list(input.triton_conf() or [])
+        if confs:
+            df = df[df["confName"].isin(confs)]
+        teams = list(input.triton_team() or [])
+        if teams:
+            df = df[df["team"].isin(teams)]
+        positions = list(input.triton_pos() or [])
+        if positions:
+            df = df[df["pos"].isin(positions)]
+        classes = list(input.triton_cls() or [])
+        if classes:
+            df = df[df["cls"].isin(classes)]
+
+        min_mpg = _as_float(input.triton_min_mpg())
+        if np.isfinite(min_mpg):
+            df = df[pd.to_numeric(df["mpg"], errors="coerce").fillna(0) >= min_mpg]
+        min_gp = _as_float(input.triton_min_gp())
+        if np.isfinite(min_gp):
+            df = df[pd.to_numeric(df["gp"], errors="coerce").fillna(0) >= min_gp]
+        min_checks = _as_float(input.triton_min_checks())
+        if np.isfinite(min_checks) and min_checks > 0:
+            df = df[df["triton_checks_passed"] >= int(min_checks)]
+
+        archetype = str(input.triton_archetype() or "all")
+        if archetype == "zone":
+            df = df[df["triton_zone"]]
+        elif archetype in TRITON_SPECIAL_ARCHETYPES:
+            df = df[df[f"triton_is_{archetype}"]]
+            if bool(input.triton_require_zone()):
+                df = df[df["triton_zone"]]
+
+        return df
+
+    @reactive.calc
+    def triton_ranked():
+        df = triton_filtered().copy()
+        if df.empty:
+            return df
+        # Rank is always the Triton WAR order, so re-sorting the board by a
+        # column does not renumber the board itself.
+        df = df.sort_values("triton_war", ascending=False, kind="mergesort")
+        df["triton_rank"] = np.arange(1, len(df) + 1)
+        sort_col = triton_sort_col.get()
+        if sort_col not in df.columns:
+            sort_col = "triton_war"
+        ascending = triton_sort_dir.get() == "asc"
+        df = df.sort_values(sort_col, ascending=ascending, kind="mergesort", na_position="last")
+        return df
+
+    @reactive.calc
+    def triton_display_rows():
+        df = triton_ranked()
+        try:
+            limit = int(str(input.triton_limit() or "100"))
+        except (TypeError, ValueError):
+            limit = 100
+        return df.head(limit) if limit > 0 else df
+
+    @reactive.effect
+    @reactive.event(input.triton_sort_click)
+    def _triton_sort_click():
+        col = str(input.triton_sort_click() or "").strip()
+        if not col:
+            return
+        if triton_sort_col.get() == col:
+            triton_sort_dir.set("asc" if triton_sort_dir.get() == "desc" else "desc")
+        else:
+            triton_sort_col.set(col)
+            triton_sort_dir.set("asc" if col in {"name", "team", "confName"} else "desc")
+
+    @reactive.effect
+    @reactive.event(input.triton_select_row)
+    def _triton_select_row():
+        pid = str(input.triton_select_row() or "").strip()
+        if not pid:
+            return
+        triton_selected.set(pid)
+        import random
+        modal_req.set((pid, random.random()))
+
+    @reactive.effect
+    @reactive.event(input.triton_reset_thresholds)
+    def _triton_reset_thresholds():
+        for metric in TRITON_ZONE_METRICS:
+            ui.update_numeric(f"triton_target_{metric['key']}", value=float(metric["target"]))
+        for criterion in TRITON_SPECIAL_CRITERIA:
+            ui.update_numeric(f"triton_target_{criterion['key']}", value=float(criterion["target"]))
+
+    @reactive.effect
+    @reactive.event(input.triton_reset_weights)
+    def _triton_reset_weights():
+        for metric in TRITON_ZONE_METRICS:
+            ui.update_slider(f"triton_weight_{metric['key']}", value=float(metric["weight"]))
+
+    def _make_triton_weight_share(metric_key):
+        @output(id=f"triton_weight_share_{metric_key}")
+        @render.text
+        def _weight_share():
+            weights = triton_weights()
+            total = sum(weights.values())
+            if total <= 0:
+                return "—"
+            return f"{weights.get(metric_key, 0.0) / total * 100:.0f}% of score"
+
+        return _weight_share
+
+    for _metric in TRITON_ZONE_METRICS:
+        _make_triton_weight_share(_metric["key"])
+
+    @output
+    @render.text
+    def triton_results_count():
+        total = len(triton_filtered())
+        shown = len(triton_display_rows())
+        return f"{shown} of {total} matching players"
+
+    @output
+    @render.ui
+    def triton_table_ui():
+        rows = triton_display_rows()
+        if rows.empty:
+            return ui.div(
+                "No D-I players match those filters. Loosen the thresholds or the archetype filter.",
+                class_="triton-empty",
+            )
+
+        selected = str(triton_selected.get() or "")
+        sort_col = triton_sort_col.get()
+        sort_dir = triton_sort_dir.get()
+        targets = triton_targets()
+        checks_total = len(TRITON_ZONE_METRICS)
+
+        dash = "\u2014"
+
+        def sort_header(label, col, extra_cls=""):
+            marker = ""
+            if sort_col == col:
+                marker = " \u2193" if sort_dir == "desc" else " \u2191"
+            cls = ' class="' + extra_cls + '"' if extra_cls else ""
+            click = "Shiny.setInputValue('triton_sort_click','" + col + "',{priority:'event'})"
+            return (
+                "<th" + cls + '><button onclick="' + click + '">'
+                + html.escape(label) + marker + "</button></th>"
+            )
+
+        head = ['<th class="triton-col-rank">#</th>']
+        head.append(sort_header("Player", "name"))
+        head.append(sort_header("Conference", "confName"))
+        head.append(sort_header("Ht", "heightIn"))
+        head.append(sort_header("MPG", "mpg"))
+        head.append(sort_header("Triton WAR", "triton_war", "triton-col-war"))
+        head.append(sort_header("Zone", "triton_checks_passed"))
+        head.extend(
+            sort_header(metric["label"], f"triton_val_{metric['key']}")
+            for metric in TRITON_ZONE_METRICS
+        )
+        head.append("<th>Archetype</th>")
+
+        metric_titles = {
+            metric["key"]: html.escape(
+                f"{metric['long']} \u00b7 target "
+                + ("\u2265 " if metric["higher_is_better"] else "\u2264 ")
+                + triton_format_target(metric, targets.get(metric["key"], metric["target"]))
+            )
+            for metric in TRITON_ZONE_METRICS
+        }
+        archetype_labels = {
+            arch_key: html.escape(archetype["label"])
+            for arch_key, archetype in TRITON_SPECIAL_ARCHETYPES.items()
+        }
+
+        # The board can run to hundreds of rows and the public site executes
+        # this in Pyodide, where building a Shiny tag object per cell is an
+        # order of magnitude slower than emitting the markup directly.
+        parts = [
+            '<div class="triton-table-card"><table class="triton-table"><thead><tr>',
+            "".join(head),
+            "</tr></thead><tbody>",
+        ]
+        for record in rows.to_dict("records"):
+            pid = str(record["id"])
+            row_cls = "triton-row is-selected" if pid == selected else "triton-row"
+            meta = " \u00b7 ".join(
+                bit
+                for bit in (
+                    str(record.get("team", "") or "").strip(),
+                    str(record.get("cls", "") or "").strip(),
+                    str(record.get("pos", "") or "").strip(),
+                )
+                if bit
+            )
+            war = _as_float(record.get("triton_war"))
+            war_text = f"{war:.1f}" if np.isfinite(war) else dash
+            war_width = min(100.0, max(0.0, war)) if np.isfinite(war) else 0.0
+            mpg = _as_float(record.get("mpg"))
+            passed = int(record.get("triton_checks_passed", 0) or 0)
+            zone_cls = "triton-zone-badge is-full" if passed >= checks_total else "triton-zone-badge"
+
+            click = (
+                "Shiny.setInputValue('triton_select_row',"
+                + html.escape(json.dumps(pid))
+                + ",{priority:'event'})"
+            )
+            parts.append('<tr class="' + row_cls + '" onclick="' + click + '">')
+            parts.append(f'<td class="triton-col-rank">{int(record["triton_rank"])}</td>')
+            parts.append(
+                '<td><div class="triton-table-player">'
+                f'{html.escape(str(record["name"]))}</div>'
+                + (f'<div class="triton-table-meta">{html.escape(meta)}</div>' if meta else "")
+                + "</td>"
+            )
+            conf_text = str(record.get("confName", "") or "").strip() or dash
+            parts.append("<td>" + html.escape(conf_text) + "</td>")
+            parts.append(f"<td>{inches_display(record.get('heightIn'))}</td>")
+            mpg_text = f"{mpg:.1f}" if np.isfinite(mpg) else dash
+            parts.append("<td>" + mpg_text + "</td>")
+            parts.append(
+                '<td class="triton-col-war">'
+                f'<div class="triton-war-value">{war_text}</div>'
+                f'<div class="triton-war-track"><div class="triton-war-fill" '
+                f'style="width:{war_width:.1f}%"></div></div></td>'
+            )
+            parts.append(f'<td><span class="{zone_cls}">{passed}/{checks_total}</span></td>')
+            for metric in TRITON_ZONE_METRICS:
+                key = metric["key"]
+                cell_cls = (
+                    "triton-metric is-pass"
+                    if bool(record.get(f"triton_ok_{key}", False))
+                    else "triton-metric is-miss"
+                )
+                parts.append(
+                    f'<td><span class="{cell_cls}" title="{metric_titles[key]}">'
+                    f'{triton_format_value(metric, record.get(f"triton_val_{key}"))}</span></td>'
+                )
+            tags = [
+                f'<span class="triton-arch-tag">{label}</span>'
+                for arch_key, label in archetype_labels.items()
+                if bool(record.get(f"triton_is_{arch_key}", False))
+            ]
+            if bool(record.get("low_sample_size", False)):
+                tags.append('<span class="triton-arch-tag is-warn">Low sample</span>')
+            parts.append(
+                '<td><div class="triton-arch-tags">' + "".join(tags) + "</div></td>"
+                if tags
+                else "<td>" + dash + "</td>"
+            )
+            parts.append("</tr>")
+
+        parts.append("</tbody></table></div>")
+        return ui.HTML("".join(parts))
 
     @reactive.effect
     @reactive.event(input.hist_select_row)
