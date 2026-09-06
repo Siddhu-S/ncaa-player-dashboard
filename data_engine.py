@@ -636,6 +636,12 @@ def load_d1_data(
     df["ast_per_40"] = (df["apg"] * pace_to_40).fillna(0)
     df["stl_per_40"] = (df["spg"] * pace_to_40).fillna(0)
     df["blk_per_40"] = (df["bpg"] * pace_to_40).fillna(0)
+    total_minutes = df["gp"] * df["mpg"]
+    df["stops_per_40"] = np.where(
+        total_minutes > 0,
+        n("stops") * 40.0 / total_minutes.replace(0, np.nan),
+        np.nan,
+    )
 
     # Assist-to-turnover (raw tov col is TOV_per_24; use AST_TOV ratio directly)
     df["ast_tov"] = n("AST_TOV")
@@ -662,6 +668,7 @@ def load_d1_data(
 
     # Usage — 0-100 in D-I → /100 for consiwaistency with D-II (both end up ~0.19 mean)
     df["usg"] = n("usg") / 100.0
+    df["3P_per_100_team_pos"] = n("3P_per_100_team_pos")
 
     # 3P share — already 0-1
     df["three_share"] = n("three_share")
@@ -679,7 +686,10 @@ def load_d1_data(
     df["PC4"] = n("val_PC1")
 
     df["bpm"] = n("bpm")
+    df["obpm"] = n("obpm")
+    df["dbpm"] = n("dbpm")
     df["porpag"] = n("PORPAG")
+    df["adj_drtg"] = n("adj_drtg")
 
     # Low-sample flag for default D-I filtering and player detail warnings.
     df["low_sample_size"] = (df["mpg"] < 10) | (df["gp"] < 5)
