@@ -699,6 +699,9 @@ def load_d1_data(
     df["mid_share"] = n("mid_share")
     df["rim_fg_pct"] = n("rim_pct")
     df["mid_fg_pct"] = n("mid_pct")
+    total_known_fga = n("total_known_fga").replace(0, np.nan)
+    df["dunk_share"] = (n("dunks_attempts") / total_known_fga).replace([np.inf, -np.inf], np.nan).fillna(0).clip(0, 1)
+    df["dunk_pct"] = n("dunk_pct").clip(0, 1)
 
     # PBP zone counts.
     df["pbp_rim_made"] = n("pbp_rim_made")

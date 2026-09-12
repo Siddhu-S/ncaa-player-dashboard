@@ -47,8 +47,18 @@ HISTORICAL_TABLE_LIMIT = 25
 HISTORICAL_CURRENT_COMP_LIMIT = 5
 HISTORICAL_CURRENT_COMP_MIN_MPG = 10.0
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
+TRITON_TRACKER_DEFAULT_IDEALS = [
+    {"player_name": "Hayden Gray", "team": "UC San Diego", "year": 2025},
+    {"player_name": "Aniwaniwa Tait-Jones", "team": "UC San Diego", "year": 2025},
+    {"player_name": "Tyler McGhie", "team": "UC San Diego", "year": 2025},
+]
+SIMILARITY_BETA_MOVEMENT = [
+    [1, 0, -2, 2, -1],
+    [0, 2, -1, 1, 0],
+    [2, -1, 0, -2, 1],
+]
 HISTORICAL_CURRENT_COMP_CACHE = {}
-LIVE_BUILD_STAMP = "TEST BUILD 08-28-2026 · 05deefa"
+LIVE_BUILD_STAMP = "TEST BUILD 09-03-2026 · triton-tracker"
 
 
 def resolve_current_d2_schema_path():
@@ -150,6 +160,8 @@ def load_historical_scores():
         "GP",
         "mins_per_game",
         "height_inches",
+        "eFG",
+        "FT_pct",
         "3P_pct",
         "3P_per_100_team_pos",
         "AST_TOV",
@@ -165,6 +177,10 @@ def load_historical_scores():
         "rim_assisted_pct",
         "rim_pct",
         "rim_share",
+        "mid_pct",
+        "mid_share",
+        "dunk_pct",
+        "dunk_share",
         "stops_per_40",
         "three_assisted_pct",
         "three_share",
@@ -220,6 +236,8 @@ def load_historical_player_index():
         "treb_per_game",
         "bpm",
         "height_inches",
+        "eFG",
+        "FT_pct",
         "3P_pct",
         "3P_per_100_team_pos",
         "AST_TOV",
@@ -235,6 +253,10 @@ def load_historical_player_index():
         "rim_assisted_pct",
         "rim_pct",
         "rim_share",
+        "mid_pct",
+        "mid_share",
+        "dunk_pct",
+        "dunk_share",
         "stops_per_40",
         "three_assisted_pct",
         "three_share",
@@ -312,8 +334,8 @@ def build_historical_current_pool():
         if row_key in current_players.columns:
             current_players[compare_key] = pd.to_numeric(current_players[row_key], errors="coerce")
     current_players["height_inches"] = pd.to_numeric(current_players.get("heightIn"), errors="coerce")
-    score_cols = HISTORICAL_COMPARE_SCORE_COLUMNS
-    grade_cols = HISTORICAL_COMPARE_GRADE_COLUMNS
+    score_cols = [f"{category_key}_score" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES]
+    grade_cols = [f"{category_key}_grade" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES]
     for col in [*score_cols, *grade_cols]:
         if col not in current_players.columns:
             current_players[col] = np.nan
@@ -328,8 +350,7 @@ def build_historical_current_pool():
     current_scores["team_key"] = current_scores["team"].map(normalize_lookup_key)
     current_scores["team_key_robust"] = current_scores["team"].map(normalize_team_lookup_key)
 
-    optional_score_cols = [col for col in [*score_cols, *grade_cols] if col in current_scores.columns]
-    keep_cols = ["name_key", "team_key", "team_key_robust", *optional_score_cols]
+    keep_cols = ["name_key", "team_key", "team_key_robust", *score_cols, *grade_cols]
     merged = current_players.merge(
         current_scores[keep_cols],
         on=["name_key", "team_key", "team_key_robust"],
@@ -1092,7 +1113,6 @@ add_archetype_columns([
     ("D-III", d3_df),
 ])
 
-
 # ─────────────────────────────────────────────────────────────────────────
 # TRITON ZONE / TRITON WAR
 # ─────────────────────────────────────────────────────────────────────────
@@ -1578,6 +1598,320 @@ def historical_slider_range(column: str, step: float):
     return (float(lo), float(hi))
 
 
+def historical_row_by_season_player_id(season_player_id):
+    if not season_player_id or HISTORICAL_PLAYER_INDEX.empty:
+        return None
+    rows = HISTORICAL_PLAYER_INDEX[
+        HISTORICAL_PLAYER_INDEX["season_player_id"].eq(str(season_player_id).strip())
+    ]
+    if rows.empty:
+        return None
+    return rows.iloc[0]
+
+
+def similarity_beta_ideal_row(ideal):
+    if HISTORICAL_PLAYER_INDEX.empty:
+        return None
+    row_id = str(ideal.get("season_player_id", "") or "").strip()
+    if row_id:
+        return historical_row_by_season_player_id(row_id)
+    player_key = normalize_lookup_key(ideal.get("player_name"))
+    team_key = normalize_lookup_key(ideal.get("team"))
+    year = _as_float(ideal.get("year"))
+    rows = HISTORICAL_PLAYER_INDEX[
+        HISTORICAL_PLAYER_INDEX["player_name"].map(normalize_lookup_key).eq(player_key)
+    ].copy()
+    if np.isfinite(year) and "year" in rows.columns:
+        rows = rows[pd.to_numeric(rows["year"], errors="coerce").eq(year)].copy()
+    exact = rows[rows["team"].map(normalize_lookup_key).eq(team_key)].copy()
+    if not exact.empty:
+        return exact.iloc[0]
+    if not rows.empty:
+        return rows.iloc[0]
+    return None
+
+
+def similarity_beta_metric(row, key, fallback="—"):
+    if row is None:
+        return fallback
+    if key == "height_inches":
+        return _format_compare_value(key, row.get(key))
+    num = _as_float(row.get(key))
+    if not np.isfinite(num):
+        return fallback
+    return f"{num:.1f}"
+
+
+def similarity_beta_comp_metric(comp, key):
+    num = _as_float(comp.get(key))
+    if not np.isfinite(num):
+        return "—"
+    return f"{num:.1f}"
+
+
+def similarity_beta_movement(board_index: int, rank_index: int):
+    board = SIMILARITY_BETA_MOVEMENT[board_index % len(SIMILARITY_BETA_MOVEMENT)]
+    delta = board[rank_index % len(board)]
+    if delta > 0:
+        return ("up", f"↑ {delta}")
+    if delta < 0:
+        return ("down", f"↓ {abs(delta)}")
+    return ("flat", "—")
+
+
+def similarity_beta_compare_payload(row, comp, *, return_to: str = ""):
+    if row is None or not comp.get("player_id"):
+        return "{}"
+    payload = {
+        "source_id": str(row.get("season_player_id", "") or "").strip(),
+        "target_id": str(comp.get("player_id", "") or "").strip(),
+    }
+    if return_to:
+        payload["return_to"] = return_to
+    return json.dumps(payload)
+
+
+def similarity_beta_rows(row, comps, board_index: int, *, compact: bool = True, return_to: str = ""):
+    rows = []
+    for i, comp in enumerate(comps):
+        movement_class, movement_label = similarity_beta_movement(board_index, i)
+        payload = similarity_beta_compare_payload(row, comp, return_to=return_to)
+        rows.append(
+            ui.div(
+                {
+                    "class": "similarity-beta-row similarity-beta-row--clickable",
+                    "onclick": f"Shiny.setInputValue('hist_open_compare',{payload},{{priority:'event'}})",
+                    "title": f"Compare {row.get('player_name', 'ideal player') if row is not None else 'ideal player'} to {comp['name']}",
+                },
+                ui.div(str(comp["rank"]), class_="similarity-beta-rank"),
+                ui.div(movement_label, class_=f"similarity-beta-move {movement_class}"),
+                ui.div(
+                    ui.div(comp["name"], class_="similarity-beta-player"),
+                    ui.div(
+                        " · ".join([bit for bit in [comp.get("team", ""), comp.get("conf", ""), comp.get("cls", "")] if bit]),
+                        class_="similarity-beta-team",
+                    ),
+                    class_="similarity-beta-player-cell",
+                ),
+                ui.div(similarity_beta_comp_metric(comp, "pts_per_game"), class_="similarity-beta-stat"),
+                ui.div(similarity_beta_comp_metric(comp, "ast_per_game"), class_="similarity-beta-stat"),
+                ui.div(similarity_beta_comp_metric(comp, "treb_per_game"), class_="similarity-beta-stat"),
+            )
+        )
+    if not rows:
+        rows.append(
+            ui.div(
+                "No current-player matches are available for this ideal player yet.",
+                class_="similarity-beta-empty",
+            )
+        )
+    return rows
+
+
+def similarity_beta_ideal_header(row, ideal):
+    ideal_name = str(
+        (row.get("player_name", "") if row is not None else "")
+        or ideal.get("player_name", "")
+        or "Ideal Player"
+    )
+    ideal_meta = historical_profile_subtitle(row) if row is not None else ""
+    if not ideal_meta:
+        ideal_bits = [
+            str(ideal.get("team", "")),
+            str(int(ideal.get("year"))) if np.isfinite(_as_float(ideal.get("year"))) else "",
+        ]
+        ideal_meta = " · ".join([bit for bit in ideal_bits if bit])
+    return ideal_name, ideal_meta
+
+
+def similarity_beta_table_head():
+    return ui.div(
+        {"class": "similarity-beta-table-head"},
+        ui.div("#"),
+        ui.div("Δ"),
+        ui.div("Current player"),
+        ui.div("PPG"),
+        ui.div("APG"),
+        ui.div("RPG"),
+    )
+
+
+def triton_tracker_ideals(saved_ids):
+    defaults = triton_tracker_default_ideals()
+    saved = triton_tracker_saved_ideals(saved_ids, seen=triton_tracker_ideal_ids(defaults))
+    return [*defaults, *saved]
+
+
+def triton_tracker_ideal_ids(ideals):
+    row_ids = set()
+    for ideal in ideals:
+        row = similarity_beta_ideal_row(ideal)
+        if row is not None:
+            row_ids.add(str(row.get("season_player_id", "") or "").strip())
+    return row_ids
+
+
+def triton_tracker_default_ideals():
+    ideals = []
+    seen = set()
+    for ideal in TRITON_TRACKER_DEFAULT_IDEALS:
+        row = similarity_beta_ideal_row(ideal)
+        if row is None:
+            continue
+        row_id = str(row.get("season_player_id", "") or "").strip()
+        if row_id in seen:
+            continue
+        ideals.append(ideal)
+        seen.add(row_id)
+    return ideals
+
+
+def triton_tracker_saved_ideals(saved_ids, seen=None):
+    ideals = []
+    seen = set(seen or set())
+    seen_saved = set()
+    ordered_saved = []
+    for value in saved_ids:
+        row_id = str(value).strip()
+        if row_id and row_id not in seen_saved:
+            ordered_saved.append(row_id)
+            seen_saved.add(row_id)
+    for row_id in ordered_saved:
+        if row_id in seen:
+            continue
+        if historical_row_by_season_player_id(row_id) is None:
+            continue
+        ideals.append({"season_player_id": row_id})
+        seen.add(row_id)
+    return ideals
+
+
+def similarity_beta_card(ideal, board_index: int):
+    row = similarity_beta_ideal_row(ideal)
+    comps = historical_current_comps_for_player(
+        row,
+        n_comp=HISTORICAL_CURRENT_COMP_LIMIT,
+        exclude_low_sample=True,
+    ) if row is not None else []
+    ideal_name, ideal_meta = similarity_beta_ideal_header(row, ideal)
+    rows = similarity_beta_rows(row, comps, board_index)
+    row_id = str(row.get("season_player_id", "") or "").strip() if row is not None else ""
+
+    return ui.div(
+        {"class": "similarity-beta-card"},
+        ui.div(
+            {"class": "similarity-beta-card-head"},
+            ui.div(
+                ui.div(ideal_name, class_="similarity-beta-ideal-name"),
+                ui.div(ideal_meta, class_="similarity-beta-ideal-meta"),
+            ),
+            ui.div("Ideal", class_="similarity-beta-pill"),
+        ),
+        ui.div(
+            {"class": "similarity-beta-ideal-stats"},
+            ui.div(ui.span("HT"), ui.tags.b(similarity_beta_metric(row, "height_inches"))),
+            ui.div(ui.span("PPG"), ui.tags.b(similarity_beta_metric(row, "pts_per_game"))),
+            ui.div(ui.span("APG"), ui.tags.b(similarity_beta_metric(row, "ast_per_game"))),
+            ui.div(ui.span("RPG"), ui.tags.b(similarity_beta_metric(row, "treb_per_game"))),
+        ),
+        similarity_beta_table_head(),
+        ui.div({"class": "similarity-beta-table"}, *rows),
+        ui.tags.button(
+            "View longer list",
+            class_="similarity-beta-more",
+            onclick=f"Shiny.setInputValue('sim_beta_open_long_list',{json.dumps(row_id)},{{priority:'event'}})",
+        ),
+    )
+
+
+def make_similarity_beta_long_list_modal(source_id: str):
+    row = historical_row_by_season_player_id(source_id)
+    if row is None:
+        return None
+    comps = historical_current_comps_for_player(
+        row,
+        n_comp=25,
+        exclude_low_sample=True,
+    )
+    ideal_name, ideal_meta = similarity_beta_ideal_header(row, {})
+    rows = similarity_beta_rows(row, comps, 0, compact=False, return_to="triton_tracker_long_list")
+    body = ui.div(
+        {"class": "similarity-beta-long-list"},
+        ui.div(
+            ui.div(ideal_name, class_="similarity-beta-ideal-name"),
+            ui.div(ideal_meta, class_="similarity-beta-ideal-meta"),
+            class_="similarity-beta-long-head",
+        ),
+        similarity_beta_table_head(),
+        ui.div({"class": "similarity-beta-table similarity-beta-table--long"}, *rows),
+    )
+    return ui.modal(
+        body,
+        title=ui.HTML(f"Longer Similarity List <b>· {html.escape(ideal_name)}</b>"),
+        easy_close=True,
+        size="l",
+    )
+
+
+def make_similarity_beta_tab():
+    return ui.div(
+        {"id": "sim-beta-tab", "class": "tab-panel"},
+        ui.output_ui("triton_tracker_ui"),
+    )
+
+
+def make_triton_tracker_content(saved_ids):
+    pinned_ideals = triton_tracker_default_ideals()
+    saved_ideals = triton_tracker_saved_ideals(
+        saved_ids,
+        seen=triton_tracker_ideal_ids(pinned_ideals),
+    )
+    saved_body = (
+        ui.div(
+            {"class": "similarity-beta-grid similarity-beta-grid--tracked"},
+            *[
+                similarity_beta_card(ideal, i + len(pinned_ideals))
+                for i, ideal in enumerate(saved_ideals)
+            ],
+        )
+        if saved_ideals
+        else ui.div(
+            "No historical ideals saved yet. Add one from Historical Players (Beta).",
+            class_="similarity-beta-tracked-empty",
+        )
+    )
+    return ui.div(
+        {"class": "similarity-beta-shell"},
+        ui.div(
+            {"class": "similarity-beta-topbar"},
+            ui.div(
+                ui.div("Triton Tracker", class_="similarity-beta-title"),
+                ui.div(
+                    "Save historical ideal players, then rank the current D-I pool by the tier-weighted similarity model.",
+                    class_="similarity-beta-subtitle",
+                ),
+            ),
+            ui.div("Movement = change since last refresh", class_="similarity-beta-refresh-note"),
+        ),
+        ui.div(
+            {"class": "similarity-beta-section-head"},
+            ui.div("Pinned UCSD ideals"),
+            ui.div("Always shown", class_="similarity-beta-section-count"),
+        ),
+        ui.div(
+            {"class": "similarity-beta-grid"},
+            *[
+                similarity_beta_card(ideal, i)
+                for i, ideal in enumerate(pinned_ideals)
+            ],
+        ),
+        ui.div(
+            {"class": "similarity-beta-section-head"},
+            ui.div("Tracked historical ideals"),
+            ui.div(f"{len(saved_ideals)} saved", class_="similarity-beta-section-count"),
+        ),
+        saved_body,
+    )
 
 
 TRITON_ARCHETYPE_FILTERS = {
@@ -1669,7 +2003,7 @@ def make_triton_tab():
             {"class": "triton-shell"},
             ui.div(
                 {"class": "triton-header-card"},
-                ui.div("Triton WAR Tracker", class_="triton-title"),
+                ui.div("Triton Zone", class_="triton-title"),
                 ui.div(
                     "Every D-I player scored against the staff's Triton Zone targets and ranked "
                     "by the weighted fit. Hitting a target is worth 70 on that metric, clearing it "
@@ -1821,7 +2155,7 @@ def make_triton_tab():
                 ),
                 ui.tags.details(
                     {"class": "triton-more"},
-                    ui.tags.summary("Triton WAR weights"),
+                    ui.tags.summary("Triton Zone weights"),
                     ui.div(
                         "How much each metric counts toward the score. Weights are normalised, so "
                         "only their sizes relative to each other matter — the percentage beside each "
@@ -1848,6 +2182,7 @@ def make_triton_tab():
             ui.output_ui("triton_table_ui"),
         ),
     )
+
 
 
 def make_historical_beta_tab():
@@ -2279,6 +2614,35 @@ def _similarity_model_value(stat_key: str, value: object):
     return num
 
 
+def _similarity_model_series(stat_key: str, values) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce").astype("float64")
+    if stat_key in SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS:
+        numeric = numeric.where(numeric.abs() > 1, numeric * 100)
+    return numeric
+
+
+def _build_current_similarity_norms(pool: pd.DataFrame) -> dict:
+    stat_keys = {
+        stat_key
+        for stat_weights in SIMILARITY_TIER_STAT_WEIGHTS.values()
+        for stat_key in stat_weights
+        if stat_key in pool.columns
+    }
+    norms = {}
+    for stat_key in stat_keys:
+        col = _similarity_model_series(stat_key, pool[stat_key])
+        mean = col.mean(skipna=True)
+        std = col.std(skipna=True, ddof=0)
+        if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+            continue
+        norms[stat_key] = {
+            "mean": float(mean),
+            "std": float(std),
+            "z": (col - mean) / std,
+        }
+    return norms
+
+
 def _apply_tier_similarity_distance(row, pool):
     working = pool.copy()
     working["historical_distance"] = np.nan
@@ -2297,16 +2661,24 @@ def _apply_tier_similarity_distance(row, pool):
             source_value = _similarity_model_value(stat_key, row.get(stat_key))
             if not np.isfinite(source_value):
                 continue
-            col = pd.to_numeric(working[stat_key], errors="coerce").map(
-                lambda value: _similarity_model_value(stat_key, value)
-            )
-            mean = col.mean(skipna=True)
-            std = col.std(skipna=True, ddof=0)
-            if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+            norm = HISTORICAL_CURRENT_SIMILARITY_NORMS.get(stat_key, {})
+            mean = norm.get("mean", np.nan)
+            std = norm.get("std", np.nan)
+            pool_z_col = norm.get("z")
+            if pool_z_col is None or not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+                col = _similarity_model_series(stat_key, working[stat_key])
+                mean = col.mean(skipna=True)
+                std = col.std(skipna=True, ddof=0)
+                if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+                    continue
+                pool_z = (col - mean) / std
+            else:
+                pool_z = pool_z_col.reindex(working.index)
+            if pool_z.isna().all():
                 continue
             usable_stats.append(stat_key)
             source_values.append((source_value - mean) / std)
-            pool_columns.append((col - mean) / std)
+            pool_columns.append(pool_z)
             weights.append(float(stat_weight))
 
         if not usable_stats:
@@ -2369,6 +2741,7 @@ def _current_compare_profile_from_row(row):
 
 
 HISTORICAL_CURRENT_POOL = build_historical_current_pool()
+HISTORICAL_CURRENT_SIMILARITY_NORMS = _build_current_similarity_norms(HISTORICAL_CURRENT_POOL)
 HISTORICAL_FILTER_YEARS = (
     sorted(
         [
@@ -2494,12 +2867,20 @@ def historical_current_comp_cards(
     return cards
 
 
-def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
+def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, triton_tracker_ids=None):
     source_profile = historical_compare_profile_from_row(row)
-    comp_cards = historical_current_comp_cards(
+    initial_current_comp_cards = historical_current_comp_cards(
         row,
         exclude_low_sample=exclude_low_sample,
         open_mode="compare",
+    )
+    triton_tracker_ids = set(triton_tracker_ids or [])
+    row_id = str(row.get("season_player_id", "") or "").strip()
+    is_tracked = row_id in triton_tracker_ids
+    tracker_label = "Remove from Triton Tracker" if is_tracked else "Add to Triton Tracker"
+    tracker_class = "triton-tracker-toggle is-tracked" if is_tracked else "triton-tracker-toggle"
+    tracker_onclick = (
+        f"window.ucsdToggleTritonTracker && window.ucsdToggleTritonTracker({json.dumps(row_id)}, this);"
     )
     pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
@@ -2529,7 +2910,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
         ("BPM", f"{_as_float(row.get('bpm')):.1f}" if pd.notna(_as_float(row.get("bpm"))) else "—", True),
     ]
     grade_rows = []
-    for category_key, category_label, _stats in SIMILARITY_COMPARE_CATEGORIES:
+    for category_key, category_label in LEGACY_SIMILARITY_SCORE_CATEGORIES:
         grade_value = _as_float(source_profile.get(f"{category_key}_grade"))
         if not np.isfinite(grade_value):
             grade_value = 0.0
@@ -2576,7 +2957,23 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
         {"class": "historical-profile-grid"},
         ui.div(
             {"class": "historical-profile-col"},
-            ui.div(source_profile["player_name"], class_="player-name"),
+            ui.div(
+                ui.div(source_profile["player_name"], class_="player-name"),
+                ui.div(
+                    ui.tags.button(
+                        "Close",
+                        class_="historical-profile-close",
+                        **{"data-bs-dismiss": "modal", "type": "button"},
+                    ),
+                    ui.tags.button(
+                        tracker_label,
+                        class_=tracker_class,
+                        onclick=tracker_onclick,
+                    ) if row_id else ui.span(),
+                    class_="historical-profile-actions",
+                ),
+                class_="historical-profile-name-row",
+            ),
             ui.div(
                 ui.span({"class": "team-dot", "style": f"background:{pc}"}),
                 source_profile["subtitle"],
@@ -2613,9 +3010,19 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
                         class_="historical-profile-comps-controls",
                     ),
                 ),
-                ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
-                    "No current-player comps are available for this profile yet.",
-                    class_="qual-note",
+                ui.div(
+                    {
+                        "class": (
+                            "historical-comp-list historical-comp-list--initial"
+                            if initial_current_comp_cards
+                            else "qual-note historical-comp-list--initial"
+                        )
+                    },
+                    *(
+                        initial_current_comp_cards
+                        if initial_current_comp_cards
+                        else ["No current-player comps are available for this profile yet."]
+                    ),
                 ),
                 class_="arch-score-panel historical-profile-comps",
             ),
@@ -2689,6 +3096,10 @@ def historical_current_comps_for_player(
                 "cls": comp.get("cls", ""),
                 "pos": comp.get("pos", ""),
                 "archetype": archetype_label(comp.get("primary_archetype", "")),
+                "mins_per_game": _as_float(comp.get("mins_per_game")),
+                "pts_per_game": _as_float(comp.get("ppg")),
+                "ast_per_game": _as_float(comp.get("apg")),
+                "treb_per_game": _as_float(comp.get("rpg")),
                 "distance": float(comp["historical_distance"]),
                 "subtitle": f"{comp['team']} \u00b7 {comp.get('cls', '')}".strip(),
                 "profile": _current_compare_profile_from_row(comp),
@@ -2717,6 +3128,7 @@ def make_similarity_compare_modal(
     target_profile,
     comparison_origin: str = "historical",
     future_profile=None,
+    return_source_id: str = "",
 ):
     profiles = [source_profile, target_profile]
     if future_profile and str(future_profile.get("player_name", "")).strip():
@@ -2754,9 +3166,13 @@ def make_similarity_compare_modal(
             )
 
     category_sections = []
+    omitted_missing_rows = 0
     for category_key, category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
         stat_rows = []
         for stat_key, stat_label in stats:
+            if all(not np.isfinite(_as_float(profile.get(stat_key))) for profile in profiles):
+                omitted_missing_rows += 1
+                continue
             row_children = [ui.div(stat_label, class_="compare-stat-label")]
             for profile in profiles:
                 row_children.append(
@@ -2771,6 +3187,8 @@ def make_similarity_compare_modal(
                     *row_children,
                 )
             )
+        if not stat_rows:
+            continue
         category_sections.append(
             ui.div(
                 ui.div(category_label, class_="compare-section-title"),
@@ -2783,6 +3201,15 @@ def make_similarity_compare_modal(
                 class_="compare-section",
             )
         )
+
+    missing_note = (
+        ui.div(
+            "Stats missing for both compared players are hidden.",
+            class_="compare-missing-note",
+        )
+        if omitted_missing_rows
+        else ui.div()
+    )
 
     footer_buttons = []
     if source_profile.get("player_id"):
@@ -2812,6 +3239,13 @@ def make_similarity_compare_modal(
             )
         )
 
+    if comparison_origin == "triton_tracker_long_list" and return_source_id:
+        close_input = "sim_beta_open_long_list"
+        close_value = return_source_id
+    else:
+        close_input = "modal_compare_back"
+        close_value = source_profile.get("player_id", "")
+
     body = ui.div(
         {"id": "compare-detail-body"},
         ui.tags.script(
@@ -2827,7 +3261,7 @@ def make_similarity_compare_modal(
                       window.__compareModalNavigating = false;
                       return;
                     }}
-                    Shiny.setInputValue('modal_compare_back', {json.dumps(source_profile.get("player_id", ""))}, {{priority:'event'}});
+                    Shiny.setInputValue({json.dumps(close_input)}, {json.dumps(close_value)}, {{priority:'event'}});
                   }}, {{ once: true }});
                 }}, 0);
                 """
@@ -2852,7 +3286,7 @@ def make_similarity_compare_modal(
                             },
                             "Full stats",
                         ) if (
-                            comparison_origin == "historical"
+                            comparison_origin in {"historical", "triton_tracker_long_list"}
                             and idx == 1
                             and profile.get("player_id")
                         ) else ui.div(),
@@ -2870,6 +3304,7 @@ def make_similarity_compare_modal(
         ),
         ui.div(
             {"class": "compare-modal-shell"},
+            missing_note,
             pc_section,
             *category_sections,
         ),
@@ -3070,79 +3505,6 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                 ),
             )
         )
-    triton_panel = []
-    if division_label == "D-I" and "triton_war" in row.index:
-        triton_war_value = _as_float(row.get("triton_war"))
-        triton_passed = int(row.get("triton_checks_passed", 0) or 0)
-        triton_total = int(row.get("triton_checks_total", len(TRITON_ZONE_METRICS)) or len(TRITON_ZONE_METRICS))
-        triton_panel.append(
-            ui.div(
-                ui.span("Triton WAR", class_="arch-score-name"),
-                ui.span(
-                    f"{triton_war_value:.1f}" if np.isfinite(triton_war_value) else "N/A",
-                    class_="arch-score-value",
-                ),
-                class_="arch-score-head",
-            )
-        )
-        triton_panel.append(
-            ui.div(
-                {"class": "arch-score-track"},
-                ui.div({
-                    "class": "arch-score-fill",
-                    "style": (
-                        f"width:{min(100.0, max(0.0, triton_war_value)):.1f}%;background:var(--accent);"
-                        if np.isfinite(triton_war_value)
-                        else "width:0;"
-                    ),
-                }),
-            )
-        )
-        triton_panel.append(
-            ui.div(
-                ui.tags.b("Zone checks: "),
-                f"{triton_passed} of {triton_total} cleared at the staff defaults.",
-                class_="qual-note",
-            )
-        )
-        triton_panel.append(
-            ui.div(
-                {"class": "triton-modal-grid"},
-                *[
-                    ui.div(
-                        {"class": "triton-modal-cell"},
-                        ui.div(metric["label"], class_="k"),
-                        ui.div(
-                            triton_format_value(metric, row.get(f"triton_val_{metric['key']}")),
-                            class_=(
-                                "v is-pass"
-                                if bool(row.get(f"triton_ok_{metric['key']}", False))
-                                else "v is-miss"
-                            ),
-                        ),
-                        ui.div(
-                            ("\u2265 " if metric["higher_is_better"] else "\u2264 ")
-                            + triton_format_target(metric, metric["target"]),
-                            class_="s",
-                        ),
-                    )
-                    for metric in TRITON_ZONE_METRICS
-                ],
-            )
-        )
-        triton_arch_hits = [
-            archetype["label"]
-            for arch_key, archetype in TRITON_SPECIAL_ARCHETYPES.items()
-            if bool(row.get(f"triton_is_{arch_key}", False))
-        ]
-        triton_panel.append(
-            ui.div(
-                ui.tags.b("Archetype: "),
-                ", ".join(triton_arch_hits) if triton_arch_hits else "No special archetype criteria met.",
-                class_="qual-note",
-            )
-        )
-
     qualification_notes = [
         ("General", row["qual_general_reason"]),
         ("PG", row["qual_pg_reason"]),
@@ -3365,11 +3727,6 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                       bio_item("BPM",      f"{bpm_value:.1f}" if pd.notna(bpm_value) else "N/A", mono=True),
                       bio_item("PORPAG",   f"{porpag_value:.2f}" if pd.notna(porpag_value) else "N/A", mono=True)),
                ui.div(
-                   ui.div("Triton Zone", class_="col-title"),
-                   *triton_panel,
-                   class_="arch-score-panel",
-               ) if triton_panel else ui.div(),
-               ui.div(
                    ui.div("Archetype", class_="col-title"),
                    ui.div(
                        ui.div(ui.tags.b("Primary: "), f"{row['archetype_v2_primary_label']} ({format_weight_pct(row['archetype_v2_primary_weight'])})", class_="qual-note"),
@@ -3433,7 +3790,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                       ui.tags.b("Tick", style="color:var(--ink-2)"),
                       " = league mean.", class_="bar-note"),
                ui.div(
-                   ui.div("Shot Profile", ui.span("share · fg% · assisted%", class_="sub"), class_="col-title"),
+                   ui.div("Shot Profile", ui.span("rate · fg% · assisted%", class_="sub"), class_="col-title"),
                    ui.div(
                        {"class": "shot-profile-shell"},
                        ui.div({"class": "shot-profile-pie"}, make_shot_profile_pie_html(row, player_id)),
@@ -3756,6 +4113,7 @@ def hex_to_rgba(hex_color, alpha):
 # stored shape ever changes so old payloads are ignored rather than misread.
 WATCHLIST_STORAGE_KEY = "ucsd_watchlist_player_ids_v1"
 WATCHLIST_LINEUP_STORAGE_KEY = "ucsd_watchlist_lineup_candidates_v1"
+TRITON_TRACKER_STORAGE_KEY = "ucsd_triton_tracker_historical_ids_v1"
 
 
 def watchlist_rows(player_ids):
@@ -4508,6 +4866,7 @@ app_ui = ui.page_fluid(
             .tab-btn.active-wl { color:#7cc47a;         border-bottom-color:#7cc47a; }
             .tab-btn.active-ucsd { color:#8a5f0e;       border-bottom-color:#8a5f0e; }
             .tab-btn.active-hist { color:#c9d6f0;       border-bottom-color:#c9d6f0; }
+            .tab-btn.active-sim-beta { color:#f0cb67;   border-bottom-color:#f0cb67; }
             .tab-btn.active-triton { color:#c8a84b;     border-bottom-color:#c8a84b; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
             .build-stamp {
@@ -4591,6 +4950,29 @@ app_ui = ui.page_fluid(
                 font-size:10px;
                 letter-spacing:.08em;
                 text-transform:uppercase;
+            }
+            .pill-btn {
+                background:transparent;
+                color:var(--ink-3);
+                border:1px solid var(--rule);
+                border-radius:999px;
+                padding:6px 12px;
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                cursor:pointer;
+                transition:all .15s ease;
+            }
+            .pill-btn:hover {
+                color:var(--ink);
+                border-color:var(--ink-2);
+            }
+            .pill-btn.active {
+                color:var(--bg);
+                background:var(--accent);
+                border-color:var(--accent);
             }
             .shot-profile-shell {
                 display:grid;
@@ -4698,9 +5080,92 @@ app_ui = ui.page_fluid(
                 white-space:nowrap;
                 flex:0 0 auto;
             }
+            .historical-profile-name-row {
+                display:flex;
+                flex-direction:column-reverse;
+                align-items:stretch;
+                gap:14px;
+                margin-bottom:4px;
+            }
+            .historical-profile-name-row .player-name {
+                min-width:0;
+                margin-bottom:0;
+                overflow-wrap:normal;
+                word-break:normal;
+                hyphens:auto;
+            }
+            .historical-profile-actions {
+                display:flex;
+                align-items:flex-start;
+                gap:8px;
+                flex-wrap:wrap;
+                justify-content:flex-start;
+                max-width:100%;
+            }
+            .historical-profile-close {
+                flex:0 0 auto;
+                margin-top:2px;
+                border:1px solid var(--rule-2);
+                background:rgba(73,106,164,.10);
+                color:var(--ink);
+                min-height:40px;
+                padding:10px 14px;
+                cursor:pointer;
+                font-family:var(--mono);
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.12em;
+                text-transform:uppercase;
+            }
+            .historical-profile-close:hover {
+                border-color:var(--ink-2);
+                background:rgba(73,106,164,.18);
+            }
+            .triton-tracker-toggle {
+                flex:0 0 auto;
+                margin-top:2px;
+                white-space:nowrap;
+                border:1px solid rgba(240,203,103,.88);
+                background:rgba(240,203,103,.16);
+                color:#f6d776;
+                min-height:40px;
+                padding:10px 12px;
+                font-family:var(--mono);
+                font-size:10px;
+                font-weight:800;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                cursor:pointer;
+                box-shadow:0 0 0 1px rgba(240,203,103,.08), 0 10px 24px rgba(0,0,0,.18);
+                transition:background .14s ease, color .14s ease, border-color .14s ease, transform .14s ease;
+            }
+            .triton-tracker-toggle:hover {
+                transform:translateY(-1px);
+                background:rgba(240,203,103,.24);
+                border-color:#f6d776;
+            }
+            .triton-tracker-toggle.is-tracked {
+                background:#f0cb67;
+                color:#101722;
+                border-color:#f0cb67;
+            }
+            @media (max-width: 780px) {
+                .historical-profile-actions {
+                    justify-content:flex-start;
+                }
+            }
             .compare-player-sub {
                 color:var(--ink-3);
                 font-size:12px;
+            }
+            .compare-missing-note {
+                border:1px dashed rgba(240,203,103,.34);
+                background:rgba(240,203,103,.06);
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+                letter-spacing:.04em;
+                padding:9px 11px;
             }
             .compare-section-title {
                 font-size:11px;
@@ -4942,9 +5407,17 @@ app_ui = ui.page_fluid(
             .tab-panel.active {
                 flex:1; height:auto; overflow:hidden;
             }
-            #hist-tab.tab-panel.active,
+            #sim-beta-tab.tab-panel.active {
+                overflow-y:auto;
+                -webkit-overflow-scrolling:touch;
+            }
+            #hist-tab.tab-panel.active {
+                overflow-y:auto;
+                -webkit-overflow-scrolling:touch;
+            }
             #triton-tab.tab-panel.active {
                 overflow-y:auto;
+                -webkit-overflow-scrolling:touch;
             }
 
             /* ── Guide / documentation page ────────────────────── */
@@ -5111,9 +5584,290 @@ app_ui = ui.page_fluid(
                 background:var(--bg-2); color:var(--ink-2); vertical-align:middle;
             }
 
-            /* ── Historical beta tab ── */
+            /* ── Similarity beta tab ── */
+            .similarity-beta-shell {
+                padding:26px 28px 34px;
+                display:flex;
+                flex-direction:column;
+                gap:14px;
+                min-height:max-content;
+            }
+            #triton_tracker_ui.recalculating,
+            #triton_tracker_ui.recalculating .similarity-beta-shell {
+                opacity:1 !important;
+                pointer-events:auto !important;
+            }
+            .similarity-beta-topbar {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-end;
+                gap:22px;
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+                padding:22px 24px;
+            }
+            .similarity-beta-title {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:44px;
+                line-height:1;
+            }
+            .similarity-beta-subtitle {
+                margin-top:8px;
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:13px;
+                max-width:640px;
+            }
+            .similarity-beta-refresh-note {
+                color:#f0cb67;
+                font-family:var(--mono);
+                font-size:11px;
+                text-transform:uppercase;
+                letter-spacing:.10em;
+                white-space:nowrap;
+            }
+            .similarity-beta-grid {
+                display:grid;
+                grid-template-columns:repeat(3, minmax(0, 1fr));
+                gap:16px;
+            }
+            .similarity-beta-card {
+                min-width:0;
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+                padding:18px;
+            }
+            .similarity-beta-section-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:12px;
+                margin:10px 0 0;
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:12px;
+                font-weight:800;
+                letter-spacing:.14em;
+                text-transform:uppercase;
+            }
+            .similarity-beta-section-count {
+                color:#f0cb67;
+                font-size:11px;
+            }
+            .similarity-beta-tracked-empty {
+                border:1px dashed rgba(240,203,103,.36);
+                background:rgba(240,203,103,.05);
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:12px;
+                letter-spacing:.04em;
+                padding:16px 18px;
+            }
+            .similarity-beta-card-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                gap:14px;
+                padding-bottom:14px;
+                border-bottom:1px solid rgba(89,113,154,.24);
+            }
+            .similarity-beta-ideal-name {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:28px;
+                line-height:1.05;
+            }
+            .similarity-beta-ideal-meta,
+            .similarity-beta-team {
+                margin-top:5px;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+                line-height:1.35;
+            }
+            .similarity-beta-pill {
+                flex:0 0 auto;
+                color:#f0cb67;
+                border:1px solid rgba(240,203,103,.44);
+                background:rgba(240,203,103,.08);
+                border-radius:999px;
+                padding:5px 8px;
+                font-family:var(--mono);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+            }
+            .similarity-beta-ideal-stats {
+                display:grid;
+                grid-template-columns:repeat(4, minmax(0, 1fr));
+                gap:10px;
+                margin:14px 0 16px;
+            }
+            .similarity-beta-ideal-stats div {
+                border:1px solid rgba(89,113,154,.24);
+                background:rgba(10,16,27,.35);
+                padding:9px 10px;
+                min-width:0;
+            }
+            .similarity-beta-ideal-stats span {
+                display:block;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:10px;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+            }
+            .similarity-beta-ideal-stats b {
+                display:block;
+                margin-top:4px;
+                color:var(--ink);
+                font-family:var(--sans);
+                font-size:17px;
+                font-weight:700;
+            }
+            .similarity-beta-table-head,
+            .similarity-beta-row {
+                display:grid;
+                grid-template-columns:32px 42px minmax(0, 1fr) 48px 48px 48px;
+                gap:10px;
+                align-items:center;
+            }
+            .similarity-beta-table-head {
+                color:var(--ink-2);
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                padding-bottom:8px;
+                border-bottom:1px solid rgba(89,113,154,.24);
+            }
+            .similarity-beta-table {
+                display:grid;
+                gap:0;
+            }
+            .similarity-beta-row {
+                min-height:64px;
+                border-bottom:1px solid rgba(89,113,154,.16);
+            }
+            .similarity-beta-row--clickable {
+                cursor:pointer;
+                transition:background .14s ease, border-color .14s ease;
+            }
+            .similarity-beta-row--clickable:hover {
+                background:rgba(73,106,164,.12);
+                border-color:rgba(201,214,240,.32);
+            }
+            .similarity-beta-row:last-child {
+                border-bottom:none;
+            }
+            .similarity-beta-rank {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:24px;
+                line-height:1;
+            }
+            .similarity-beta-move {
+                font-family:var(--mono);
+                font-size:13px;
+                font-weight:700;
+            }
+            .similarity-beta-move.up { color:#7cc47a; }
+            .similarity-beta-move.down { color:#e06f5f; }
+            .similarity-beta-move.flat { color:var(--ink-3); }
+            .similarity-beta-player-cell {
+                min-width:0;
+            }
+            .similarity-beta-player {
+                color:var(--ink);
+                font-family:var(--sans);
+                font-size:17px;
+                line-height:1.18;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+            }
+            .similarity-beta-stat {
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:12px;
+                text-align:right;
+            }
+            .similarity-beta-empty {
+                padding:18px 0 2px;
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:13px;
+            }
+            .similarity-beta-more {
+                width:100%;
+                margin-top:14px;
+                border:1px solid rgba(240,203,103,.38);
+                background:rgba(240,203,103,.08);
+                color:#f0cb67;
+                min-height:38px;
+                cursor:pointer;
+                font-family:var(--mono);
+                font-size:11px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                transition:background .14s ease, border-color .14s ease;
+            }
+            .similarity-beta-more:hover {
+                background:rgba(240,203,103,.14);
+                border-color:rgba(240,203,103,.62);
+            }
+            .similarity-beta-long-list {
+                display:grid;
+                gap:14px;
+                max-height:min(76vh, 760px);
+                overflow:auto;
+                padding:4px 2px 8px;
+            }
+            .similarity-beta-long-head {
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+                padding:16px 18px;
+            }
+            .similarity-beta-table--long .similarity-beta-row {
+                min-height:58px;
+            }
+            @media (max-width: 1180px) {
+                .similarity-beta-grid {
+                    grid-template-columns:repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (max-width: 760px) {
+                .similarity-beta-grid {
+                    grid-template-columns:1fr;
+                }
+                .similarity-beta-shell {
+                    padding:18px 16px 24px;
+                }
+                .similarity-beta-topbar {
+                    flex-direction:column;
+                    align-items:flex-start;
+                    padding:18px;
+                }
+                .similarity-beta-title {
+                    font-size:34px;
+                }
+                .similarity-beta-refresh-note {
+                    white-space:normal;
+                }
+                .similarity-beta-card {
+                    padding:14px;
+                }
+                .similarity-beta-table-head,
+                .similarity-beta-row {
+                    grid-template-columns:28px 38px minmax(0, 1fr) 38px 38px 38px;
+                }
+            }
 
-            /* ── Triton WAR tracker ────────────────────────────── */
+            /* ── Triton Zone tracker ───────────────────────────── */
             .triton-shell {
                 padding:26px 28px 34px;
                 display:flex;
@@ -5569,11 +6323,15 @@ app_ui = ui.page_fluid(
                 border:1px solid var(--rule);
                 background:rgba(19,27,41,.72);
             }
+
+            /* ── Historical beta tab ── */
             .historical-shell {
                 padding:26px 28px 34px;
                 display:flex;
                 flex-direction:column;
                 gap:18px;
+                flex:0 0 auto;
+                min-height:min-content;
             }
             .historical-header-card,
             .historical-table-card,
@@ -6007,6 +6765,12 @@ app_ui = ui.page_fluid(
                 display:block;
                 min-height:0;
             }
+            .historical-profile-comps > .shiny-bound-output:empty {
+                display:none;
+            }
+            .historical-profile-comps:has(> .shiny-bound-output:not(:empty)) > .historical-comp-list--initial {
+                display:none;
+            }
             .historical-profile-comps .historical-comp-list {
                 grid-template-columns:1fr;
                 gap:12px;
@@ -6103,6 +6867,7 @@ app_ui = ui.page_fluid(
                     align-items:flex-start;
                 }
             }
+
             @media (max-width: 1180px) {
                 .historical-filter-field,
                 .historical-filter-field--slider,
@@ -6297,6 +7062,42 @@ app_ui = ui.page_fluid(
                 sync();
             }
 
+            function historicalScrollState() {
+                var panel = document.getElementById('hist-tab');
+                var table = document.querySelector('.historical-results-table-card');
+                return {
+                    panelTop: panel ? panel.scrollTop : 0,
+                    tableTop: table ? table.scrollTop : 0,
+                    tableLeft: table ? table.scrollLeft : 0
+                };
+            }
+
+            function restoreHistoricalScrollState(state) {
+                if (!state) return;
+                var restore = function() {
+                    var panel = document.getElementById('hist-tab');
+                    var table = document.querySelector('.historical-results-table-card');
+                    if (panel) panel.scrollTop = state.panelTop || 0;
+                    if (table) {
+                        table.scrollTop = state.tableTop || 0;
+                        table.scrollLeft = state.tableLeft || 0;
+                    }
+                };
+                restore();
+                window.requestAnimationFrame(function() {
+                    restore();
+                    window.requestAnimationFrame(restore);
+                });
+            }
+
+            window.ucsdOpenHistoricalProfile = function(rowId) {
+                window.__historicalScrollState = historicalScrollState();
+                if (window.Shiny && window.Shiny.setInputValue) {
+                    window.Shiny.setInputValue('hist_select_row', rowId, {priority:'event'});
+                }
+                restoreHistoricalScrollState(window.__historicalScrollState);
+            };
+
             function bindDocumentScatterClicks() {
                 if (!document.body || document.body.dataset.codexGlobalScatterBound === '1') return;
                 document.addEventListener('click', function(ev) {
@@ -6336,12 +7137,20 @@ app_ui = ui.page_fluid(
                     p.classList.remove('active');
                 });
                 document.querySelectorAll('.tab-btn').forEach(function(b) {
-                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist','active-triton');
+                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist','active-sim-beta','active-triton');
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
                 if (window.Shiny && window.Shiny.setInputValue) {
                     window.Shiny.setInputValue('active_tab', tab, {priority: 'event'});
+                    if (tab === 'sim-beta' && window.ucsdSyncTritonTracker) {
+                        window.ucsdSyncTritonTracker(true);
+                    }
+                    window.Shiny.setInputValue(
+                        tab === 'sim-beta' ? 'triton_tracker_visible' : 'triton_tracker_hidden',
+                        Date.now(),
+                        {priority: 'event'}
+                    );
                 }
 
                 requestAnimationFrame(function() {
@@ -6376,6 +7185,9 @@ app_ui = ui.page_fluid(
                     window.requestAnimationFrame(updateHistoricalHeightSliderLabels);
                 }
                 initHistoricalHeightSliderFormatting();
+                if (window.__historicalScrollState) {
+                    restoreHistoricalScrollState(window.__historicalScrollState);
+                }
             }, true);
             window.setInterval(styleHistoricalSelectize, 1000);
             window.setInterval(updateHistoricalHeightSliderLabels, 1000);
@@ -6430,6 +7242,80 @@ app_ui = ui.page_fluid(
                 }}, 100);
             }})();
         """),
+        ui.tags.script(f"""
+            (function() {{
+                var KEY = {json.dumps(TRITON_TRACKER_STORAGE_KEY)};
+                function readIds() {{
+                    var ids = [];
+                    try {{
+                        var raw = localStorage.getItem(KEY);
+                        if (raw) {{
+                            var parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed)) {{
+                                ids = parsed.filter(function(v) {{ return typeof v === 'string' && v.trim(); }});
+                            }}
+                        }}
+                    }} catch (err) {{ ids = []; }}
+                    return ids;
+                }}
+                function writeIds(ids) {{
+                    try {{
+                        localStorage.setItem(KEY, JSON.stringify(ids));
+                    }} catch (err) {{}}
+                }}
+                var lastSentIds = null;
+                function syncTritonTracker(force) {{
+                    if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
+                    var ids = readIds();
+                    var signature = JSON.stringify(ids);
+                    if (!force && document.body.dataset.ucsdTritonTrackerRestored === '1' && signature === lastSentIds) return;
+                    document.body.dataset.ucsdTritonTrackerRestored = '1';
+                    lastSentIds = signature;
+                    window.Shiny.setInputValue(
+                        'triton_tracker_restore',
+                        {{ids: ids, nonce: Date.now()}},
+                        {{priority: 'event'}}
+                    );
+                }}
+                window.ucsdSyncTritonTracker = syncTritonTracker;
+                window.ucsdToggleTritonTracker = function(id, button) {{
+                    if (!id) return;
+                    var ids = readIds();
+                    var idx = ids.indexOf(id);
+                    var isTracked = idx === -1;
+                    if (isTracked) {{
+                        ids.push(id);
+                    }} else {{
+                        ids.splice(idx, 1);
+                    }}
+                    writeIds(ids);
+                    if (button) {{
+                        button.classList.toggle('is-tracked', isTracked);
+                        button.textContent = isTracked ? 'Remove from Triton Tracker' : 'Add to Triton Tracker';
+                    }}
+                    if (window.Shiny && window.Shiny.setInputValue) {{
+                        syncTritonTracker(true);
+                        window.Shiny.setInputValue(
+                            'toggle_triton_tracker_direct',
+                            {{id: id, tracked: isTracked, nonce: Date.now()}},
+                            {{priority: 'event'}}
+                        );
+                    }}
+                }};
+                document.addEventListener('shiny:connected', function() {{ syncTritonTracker(false); }});
+                var tries = 0;
+                var timer = window.setInterval(function() {{
+                    var app = window.Shiny && window.Shiny.shinyapp;
+                    var live = app && (typeof app.isConnected !== 'function' || app.isConnected());
+                    if (document.body && live && window.Shiny.setInputValue) {{
+                        syncTritonTracker(false);
+                        tries = 0;
+                        return;
+                    }}
+                    if (++tries > 600) {{ window.clearInterval(timer); }}
+                }}, 1000);
+            }})();
+        """),
     ),
 
     ui.div({"id": "atlas-shell"},
@@ -6464,11 +7350,14 @@ app_ui = ui.page_fluid(
                ui.tags.button("Division III", id="btn-d3", class_="tab-btn",
                               onclick="switchTab('d3')"),
                ui.div({"class": "tab-sep"}),
+               ui.tags.button("Triton Tracker", id="btn-sim-beta", class_="tab-btn",
+                              onclick="switchTab('sim-beta')"),
+               ui.div({"class": "tab-sep"}),
+               ui.tags.button("Triton Zone", id="btn-triton", class_="tab-btn",
+                              onclick="switchTab('triton')"),
+               ui.div({"class": "tab-sep"}),
                ui.tags.button("Historical Players (beta)", id="btn-hist", class_="tab-btn",
                               onclick="switchTab('hist')"),
-               ui.div({"class": "tab-sep"}),
-               ui.tags.button("Triton WAR", id="btn-triton", class_="tab-btn",
-                              onclick="switchTab('triton')"),
                ui.div({"class": "tab-sep"}),
                ui.tags.button("Archetype Guide", id="btn-info", class_="tab-btn",
                               onclick="switchTab('info')"),
@@ -6498,9 +7387,11 @@ app_ui = ui.page_fluid(
                           make_sidebar("d3", d3_df, d3_conferences),
                           make_plot_area("d3"))),
 
-            make_historical_beta_tab(),
+            make_similarity_beta_tab(),
 
             make_triton_tab(),
+
+            make_historical_beta_tab(),
 
             ui.div({"id": "info-tab", "class": "tab-panel"},
                    make_explainer_page()),
@@ -6537,6 +7428,7 @@ app_ui = ui.page_fluid(
     ui.output_ui("watchlist_lineup_data"),
     ui.output_ui("watchlist_lineup_sync"),
     ui.output_ui("watchlist_persist"),
+    ui.output_ui("triton_tracker_persist"),
 )
 
 
@@ -6556,6 +7448,9 @@ def server(input, output, session):
     # Flipped once the browser has handed back its stored watchlist, so the
     # empty starting set is never written over what was already saved.
     watchlist_restored = reactive.Value(False)
+    triton_tracker_ids = reactive.Value(set())
+    triton_tracker_restored = reactive.Value(False)
+    triton_tracker_visible_state = reactive.Value(False)
     radar_selected = reactive.Value([])
     radar_stat_selected = reactive.Value(DEFAULT_RADAR_STAT_KEYS)
     modal_req = reactive.Value(None)
@@ -6606,14 +7501,7 @@ def server(input, output, session):
         return (cur_lo, cur_hi)
 
     def historical_row_by_id(season_player_id):
-        if not season_player_id or HISTORICAL_PLAYER_INDEX.empty:
-            return None
-        rows = HISTORICAL_PLAYER_INDEX[
-            HISTORICAL_PLAYER_INDEX["season_player_id"].eq(str(season_player_id).strip())
-        ]
-        if rows.empty:
-            return None
-        return rows.iloc[0]
+        return historical_row_by_season_player_id(season_player_id)
 
     @reactive.calc
     def hist_filtered():
@@ -6915,6 +7803,75 @@ def server(input, output, session):
           }} catch (err) {{}}
         }})();
         """)
+
+    # ── Triton Tracker restore from browser storage ──────────────────────
+    @reactive.effect
+    @reactive.event(input.triton_tracker_restore)
+    def _restore_triton_tracker():
+        payload = input.triton_tracker_restore() or {}
+        stored = payload.get("ids") or [] if isinstance(payload, dict) else []
+        restored = {
+            str(row_id).strip()
+            for row_id in stored
+            if historical_row_by_id(str(row_id).strip()) is not None
+        }
+        triton_tracker_ids.set(restored)
+        triton_tracker_restored.set(True)
+
+    @output
+    @render.ui
+    def triton_tracker_persist():
+        if not triton_tracker_restored.get():
+            return None
+        ids_json = json.dumps(sorted(triton_tracker_ids.get())).replace("</", "<\\/")
+        return ui.tags.script(f"""
+        (function() {{
+          try {{
+            localStorage.setItem({json.dumps(TRITON_TRACKER_STORAGE_KEY)}, JSON.stringify({ids_json}));
+          }} catch (err) {{}}
+        }})();
+        """)
+
+    @reactive.effect
+    @reactive.event(input.toggle_triton_tracker)
+    def _toggle_triton_tracker():
+        row_id = str(input.toggle_triton_tracker() or "").strip()
+        if not row_id or historical_row_by_id(row_id) is None:
+            return
+        curr = set(triton_tracker_ids.get())
+        curr.discard(row_id) if row_id in curr else curr.add(row_id)
+        triton_tracker_ids.set(curr)
+
+    @reactive.effect
+    @reactive.event(input.toggle_triton_tracker_direct)
+    def _toggle_triton_tracker_direct():
+        payload = input.toggle_triton_tracker_direct() or {}
+        if not isinstance(payload, dict):
+            return
+        row_id = str(payload.get("id", "") or "").strip()
+        if not row_id or historical_row_by_id(row_id) is None:
+            return
+        curr = set(triton_tracker_ids.get())
+        if bool(payload.get("tracked")):
+            curr.add(row_id)
+        else:
+            curr.discard(row_id)
+        triton_tracker_ids.set(curr)
+
+    @reactive.effect
+    @reactive.event(input.triton_tracker_visible)
+    def _triton_tracker_visible():
+        triton_tracker_visible_state.set(True)
+
+    @reactive.effect
+    @reactive.event(input.triton_tracker_hidden)
+    def _triton_tracker_hidden():
+        triton_tracker_visible_state.set(False)
+
+    @output
+    @render.ui
+    def triton_tracker_ui():
+        return make_triton_tracker_content(triton_tracker_ids.get())
 
     # ── Watchlist toggle ──────────────────────────────────────────────────
     @reactive.effect
@@ -7896,7 +8853,7 @@ def server(input, output, session):
         head.append(sort_header("Conference", "confName"))
         head.append(sort_header("Ht", "heightIn"))
         head.append(sort_header("MPG", "mpg"))
-        head.append(sort_header("Triton WAR", "triton_war", "triton-col-war"))
+        head.append(sort_header("Triton Zone", "triton_war", "triton-col-war"))
         head.append(sort_header("Zone", "triton_checks_passed"))
         head.extend(
             sort_header(metric["label"], f"triton_val_{metric['key']}")
@@ -8003,8 +8960,6 @@ def server(input, output, session):
         row_id = str(input.hist_select_row() or "").strip()
         if not row_id:
             return
-        hist_selected.set(row_id)
-        hist_modal_selected.set(row_id)
         hist_modal_exclude_low_sample_state.set(False)
         source_row = historical_row_by_id(row_id)
         if source_row is None:
@@ -8013,6 +8968,7 @@ def server(input, output, session):
             make_historical_profile_modal(
                 source_row,
                 exclude_low_sample=bool(hist_modal_exclude_low_sample_state.get()),
+                triton_tracker_ids=triton_tracker_ids.get(),
             )
         )
 
@@ -8028,20 +8984,25 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.hist_modal_exclude_low_sample_current)
     def _hist_modal_exclude_low_sample_current():
+        value = bool(input.hist_modal_exclude_low_sample_current())
+        hist_modal_exclude_low_sample_state.set(value)
+
+    @output
+    @render.ui
+    def hist_modal_current_comps_ui():
         row_id = str(hist_modal_selected.get() or "").strip()
         source_row = historical_row_by_id(row_id)
         if source_row is None:
-            return
-        value = bool(input.hist_modal_exclude_low_sample_current())
-        if hist_modal_exclude_low_sample_state.get() == value:
-            return
-        hist_modal_exclude_low_sample_state.set(value)
-        ui.modal_show(
-            make_historical_profile_modal(
-                source_row,
-                exclude_low_sample=value,
-            )
+            return ui.div("Choose a historical player to load current-player comps.", class_="qual-note")
+        exclude_low_sample = bool(input.hist_modal_exclude_low_sample_current())
+        cards = historical_current_comp_cards(
+            source_row,
+            exclude_low_sample=exclude_low_sample,
+            open_mode="compare",
         )
+        if not cards:
+            return ui.div("No current-player comps are available for this profile yet.", class_="qual-note")
+        return ui.div({"class": "historical-comp-list"}, *cards)
 
     @reactive.effect
     @reactive.event(input.hist_open_compare)
@@ -8059,14 +9020,27 @@ def server(input, output, session):
             return
         source_profile = historical_compare_profile_from_row(source_row)
         target_profile = _current_compare_profile_from_row(target_rows.iloc[0])
+        return_to = str(payload.get("return_to", "") or "").strip()
+        compare_origin = "triton_tracker_long_list" if return_to == "triton_tracker_long_list" else "historical"
         compare_req.set(payload)
         ui.modal_show(
             make_similarity_compare_modal(
                 source_profile,
                 target_profile,
-                "historical",
+                compare_origin,
+                return_source_id=source_id if compare_origin == "triton_tracker_long_list" else "",
             )
         )
+
+    @reactive.effect
+    @reactive.event(input.sim_beta_open_long_list)
+    def _sim_beta_open_long_list():
+        source_id = str(input.sim_beta_open_long_list() or "").strip()
+        if not source_id:
+            return
+        modal = make_similarity_beta_long_list_modal(source_id)
+        if modal is not None:
+            ui.modal_show(modal)
 
     @output
     @render.text
@@ -8110,7 +9084,7 @@ def server(input, output, session):
                 ui.tags.tr(
                     {
                         "class": f"historical-row{selected_cls}",
-                        "onclick": f"Shiny.setInputValue('hist_select_row',{json.dumps(row_id)},{{priority:'event'}})",
+                        "onclick": f"window.ucsdOpenHistoricalProfile && window.ucsdOpenHistoricalProfile({json.dumps(row_id)})",
                     },
                     ui.tags.td(
                         ui.div(str(row["player_name"]), class_="historical-table-player"),

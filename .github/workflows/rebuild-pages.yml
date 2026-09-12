@@ -37,6 +37,7 @@ jobs:
       # inside the new app.json, bloating it further on every run.
       - run: rm -rf docs
       - run: shinylive export . docs
+      - run: python scripts/inject_shinylive_cache_bust.py docs/index.html "$GITHUB_SHA"
       # Gates the exported site behind a password prompt. Add a repository
       # secret named SITE_PASSWORD to enable it; without one, the site
       # publishes unprotected (a warning is logged below).
