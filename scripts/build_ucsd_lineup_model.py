@@ -41,13 +41,30 @@ ROLE_TO_SLOT = {
     "C": "C",
 }
 
-# Jersey numbers are public record, not a statistical claim -- carried over
-# for players who were already on last season's roster. Left blank ("–") for
-# incoming transfers whose UCSD number isn't public yet.
+# Official 2026-27 UCSD roster, checked against UCSDTritons.com on 2026-09-03.
+# The statsTeam value tells the model which 2025-26 row to use for returning
+# players/transfers when one exists in the local Barttorvik snapshot.
+OFFICIAL_ROSTER = [
+    {"name": "Kayde Dotson", "num": 0, "pos": "SG", "role": "Combo G", "yr": "Jr", "htIn": 73, "priorSchool": "Loyola Chicago", "statsTeam": "Loyola Chicago", "isNew": True},
+    {"name": "Rahmir Barno", "num": 1, "pos": "PG", "role": "Scoring PG", "yr": "Sr", "htIn": 72, "priorSchool": "Florida Gulf Coast", "statsTeam": "Florida Gulf Coast", "isNew": True},
+    {"name": "Jordan Johnson", "num": 2, "pos": "SG", "role": "Combo G", "yr": "Jr", "htIn": 75, "priorSchool": "Calhoun CC (Ala.)", "statsTeam": None, "isNew": True},
+    {"name": "Cade Pendleton", "num": 4, "pos": "PF", "role": "Wing F", "yr": "Sr", "htIn": 82, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Camp Wagner", "num": 5, "pos": "SG", "role": "Wing G", "yr": "Sr", "htIn": 78, "priorSchool": "Indiana State", "statsTeam": "Indiana St.", "isNew": True},
+    {"name": "Leo Beath", "num": 8, "pos": "SF", "role": "Wing F", "yr": "Sr", "htIn": 80, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Tom Beattie", "num": 9, "pos": "SG", "role": "Combo G", "yr": "Sr", "htIn": 77, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Alex Chaikin", "num": 10, "pos": "SG", "role": "Combo G", "yr": "Jr", "htIn": 77, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Jasen Brooks", "num": 11, "pos": "PG", "role": "Pure PG", "yr": "Jr", "htIn": 72, "priorSchool": None, "statsTeam": None, "isNew": False},
+    {"name": "Jaden Vance", "num": 13, "pos": "SF", "role": "Wing G", "yr": "So", "htIn": 78, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Jake Holmes", "num": 14, "pos": "SF", "role": "Wing F", "yr": "Fr", "htIn": 80, "priorSchool": "Rangiora HS", "statsTeam": None, "isNew": True},
+    {"name": "Aidan Burke", "num": 20, "pos": "SG", "role": "Combo G", "yr": "Sr", "htIn": 75, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Yaqub Mir", "num": 22, "pos": "PG", "role": "Combo G", "yr": "Jr", "htIn": 74, "priorSchool": None, "statsTeam": None, "isNew": False},
+    {"name": "Dimitrije Vukicevic", "num": 33, "pos": "C", "role": "C", "yr": "So", "htIn": 84, "priorSchool": None, "statsTeam": TEAM, "isNew": False},
+    {"name": "Olavi Suutela", "num": 37, "pos": "PF", "role": "Wing F", "yr": "So", "htIn": 82, "priorSchool": "Oregon State", "statsTeam": "Oregon St.", "isNew": True},
+    {"name": "Treysen Eaglestaff", "num": 52, "pos": "SG", "role": "Wing G", "yr": "Gr", "htIn": 78, "priorSchool": "West Virginia", "statsTeam": "West Virginia", "isNew": True},
+]
+
 KNOWN_NUMBERS = {
-    "Leo Beath": 8, "Tom Beattie": 9, "Alex Chaikin": 10, "Aidan Burke": 20,
-    "Jaden Vance": 13, "Dimitrije Vukicevic": 33, "Cade Pendleton": 4,
-    "Emanuel Prospere II": 2,
+    player["name"]: player["num"] for player in OFFICIAL_ROSTER
 }
 
 
@@ -186,6 +203,65 @@ def player_record(row: pd.Series, peer_df: pd.DataFrame, is_new: bool, prior_sch
     }
 
 
+def match_official_player(df: pd.DataFrame, info: dict) -> pd.Series | None:
+    stats_team = info.get("statsTeam")
+    if not stats_team:
+        return None
+    matches = df[(df["player_name"] == info["name"]) & (df["team"] == stats_team)]
+    if matches.empty:
+        return None
+    return matches.sort_values("mins_per_game", ascending=False).iloc[0]
+
+
+def official_player_record(info: dict, row: pd.Series | None, peer_df: pd.DataFrame) -> dict:
+    if row is None:
+        return {
+            "name": info["name"],
+            "num": info["num"],
+            "pos": info["pos"],
+            "role": info["role"],
+            "yr": info["yr"],
+            "htIn": info["htIn"],
+            "ht": height_str(info["htIn"]),
+            "bpr": 0.0,
+            "obpr": 0.0,
+            "dbpr": 0.0,
+            "prpgi": 0.0,
+            "indDrtg": None,
+            "ts": None,
+            "usg": None,
+            "threeRate": 0.0,
+            "threePct": None,
+            "arate": None,
+            "torate": None,
+            "oreb": None,
+            "dreb": None,
+            "ftr": None,
+            "stl": None,
+            "blk": None,
+            "fromConf": None,
+            "priorSchool": info.get("priorSchool"),
+            "isNew": info["isNew"],
+            "lowSample": True,
+            "gp": 0,
+            "mpg": 0.0,
+            "note": "Listed on UCSD's official 2026-27 roster; no matched 2025-26 D-I stat row is available in the local model data.",
+        }
+
+    rec = player_record(row, peer_df, is_new=info["isNew"], prior_school=info.get("priorSchool"))
+    rec.update({
+        "num": info["num"],
+        "pos": info["pos"],
+        "role": info["role"],
+        "yr": info["yr"],
+        "htIn": info["htIn"],
+        "ht": height_str(info["htIn"]),
+        "priorSchool": info.get("priorSchool"),
+        "isNew": info["isNew"],
+    })
+    return rec
+
+
 def main() -> None:
     df = pd.read_csv(D1_PATH, low_memory=False)
     peer_df = df[(df["mins_per_game"] >= MIN_MPG_FOR_FIT) & (df["GP"] >= MIN_GP_FOR_FIT)]
@@ -194,34 +270,16 @@ def main() -> None:
     conf_strength = compute_conf_strength(df)
 
     transfers = pd.read_csv(TRANSFER_PATH)
-    departed = set(
-        transfers.loc[
-            (transfers["from"] == TEAM) & (transfers["status"] == "Portal committed"),
-            "player",
-        ]
-    )
-    incoming = transfers[(transfers["to"] == TEAM) & (transfers["status"] == "Portal committed")]
-
-    roster = df[(df["team"] == TEAM) & (df["conf"] == CONF)].copy()
-    roster = roster[~roster["player_name"].isin(departed)]
-
     players = {}
     used_ids: set[str] = set()
-    for _, row in roster.iterrows():
-        pid = slugify(row["player_name"], used_ids)
+    unmatched_official = []
+    for info in OFFICIAL_ROSTER:
+        row = match_official_player(df, info)
+        if row is None:
+            unmatched_official.append(info["name"])
+        pid = slugify(info["name"], used_ids)
         used_ids.add(pid)
-        players[pid] = player_record(row, peer_df, is_new=False, prior_school=None)
-
-    unresolved_incoming = []
-    for _, t in incoming.iterrows():
-        match = df[df["player_name"] == t["player"]]
-        if match.empty:
-            unresolved_incoming.append(t["player"])
-            continue
-        row = match.iloc[0]
-        pid = slugify(row["player_name"], used_ids)
-        used_ids.add(pid)
-        players[pid] = player_record(row, peer_df, is_new=True, prior_school=t["from"])
+        players[pid] = official_player_record(info, row, peer_df)
 
     # "Potential Additions": real, currently-available (uncommitted)
     # transfers, ranked by ORtg among reasonably-used players, for the
@@ -242,9 +300,10 @@ def main() -> None:
         "meta": {
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "dataSource": "mbb_with_pca_all_players_2026_with_pbp.csv + transfer_portal_cache.csv (Barttorvik)",
-            "season": "2025-26 individual stats, projecting 2026-27 UCSD roster",
-            "unresolvedIncoming": unresolved_incoming,
-            "departed": sorted(departed),
+            "rosterSource": "UCSDTritons.com 2026-27 Men's Basketball Roster, checked 2026-09-03",
+            "season": "2025-26 individual stats, official 2026-27 UCSD roster",
+            "unmatchedOfficialRoster": unmatched_official,
+            "departed": [],
         },
         "ortgModel": ortg_model,
         "confStrength": conf_strength,
@@ -262,9 +321,8 @@ def main() -> None:
     print("Conference strength (net rating vs Big West):")
     for conf, val in sorted(conf_strength.items(), key=lambda kv: -kv[1])[:10]:
         print(f"  {conf}: {val:+.2f}")
-    if unresolved_incoming:
-        print(f"WARNING: could not find prior-season stats for incoming: {unresolved_incoming}")
-    print(f"Departed (excluded from roster): {sorted(departed)}")
+    if unmatched_official:
+        print(f"Official roster players without matched stat rows: {unmatched_official}")
 
 
 if __name__ == "__main__":

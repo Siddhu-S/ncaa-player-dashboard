@@ -4,8 +4,94 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shiny App</title>
-    <script
-      src="./shinylive/load-shinylive-sw.js"
+    
+    <meta name="ncaa-dashboard-build" content="78d5e789d9bbe7175f05fdf4621b579024d9cc2b" />
+    <script>
+      (function() {
+        var buildId = "78d5e789d9bbe7175f05fdf4621b579024d9cc2b";
+        var storageKey = "ncaa-dashboard-build-id";
+        var priorBuild = null;
+        try {
+          priorBuild = localStorage.getItem(storageKey);
+        } catch (err) {
+          priorBuild = null;
+        }
+        var needsRefresh = priorBuild !== buildId;
+
+        window.__DASHBOARD_BUILD_ID__ = buildId;
+
+        var originalFetch = window.fetch ? window.fetch.bind(window) : null;
+        if (originalFetch) {
+          window.fetch = function(resource, init) {
+            try {
+              var request = resource;
+              var url = null;
+              if (typeof resource === "string") {
+                url = new URL(resource, window.location.href);
+              } else if (resource instanceof Request) {
+                url = new URL(resource.url, window.location.href);
+              }
+              if (
+                url &&
+                (url.pathname.endsWith("/app.json") ||
+                 url.pathname.endsWith("/shinylive-sw.js") ||
+                 url.pathname.endsWith("/load-shinylive-sw.js"))
+              ) {
+                url.searchParams.set("v", buildId);
+                request = resource instanceof Request ? new Request(url.toString(), resource) : url.toString();
+              }
+              return originalFetch(request, init);
+            } catch (err) {
+              return originalFetch(resource, init);
+            }
+          };
+        }
+
+        if (!needsRefresh) {
+          return;
+        }
+
+        function done() {
+          try {
+            localStorage.setItem(storageKey, buildId);
+          } catch (err) {}
+          window.location.replace(window.location.pathname + "?v=" + encodeURIComponent(buildId));
+        }
+
+        var unregisterPromise = Promise.resolve();
+        if ("serviceWorker" in navigator && navigator.serviceWorker.getRegistrations) {
+          unregisterPromise = navigator.serviceWorker.getRegistrations()
+            .then(function(registrations) {
+              return Promise.all(registrations.map(function(reg) {
+                return reg.unregister();
+              }));
+            })
+            .catch(function() { return []; });
+        }
+
+        unregisterPromise
+          .then(function() {
+            if (!("caches" in window) || !window.caches.keys) {
+              return [];
+            }
+            return window.caches.keys().then(function(keys) {
+              return Promise.all(
+                keys
+                  .filter(function(key) {
+                    return key.toLowerCase().indexOf("shinylive") >= 0;
+                  })
+                  .map(function(key) {
+                    return window.caches.delete(key);
+                  })
+              );
+            });
+          })
+          .catch(function() { return []; })
+          .finally(done);
+      })();
+    </script>
+<script
+      src="./shinylive/load-shinylive-sw.js?v=78d5e789d9bbe7175f05fdf4621b579024d9cc2b"
       type="module"
     ></script>
     <script type="module">
@@ -21,6 +107,82 @@
     
   </head>
   <body>
+<style>
+  #pw-gate {
+    position: fixed; inset: 0; z-index: 999999;
+    display: flex; align-items: center; justify-content: center;
+    background: #0b1220; font-family: system-ui, sans-serif;
+  }
+  #pw-gate form {
+    background: #151d2e; padding: 2rem 2.5rem; border-radius: 12px;
+    display: flex; flex-direction: column; gap: 0.75rem; min-width: 280px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  }
+  #pw-gate h1 { color: #e8ecf4; font-size: 1.1rem; margin: 0 0 0.25rem; }
+  #pw-gate input {
+    padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid #2c3a54;
+    background: #0b1220; color: #e8ecf4; font-size: 1rem;
+  }
+  #pw-gate button {
+    padding: 0.6rem 0.75rem; border-radius: 8px; border: none;
+    background: #3b82f6; color: white; font-size: 1rem; cursor: pointer;
+  }
+  #pw-gate button:hover { background: #2563eb; }
+  #pw-gate .pw-error { color: #f87171; font-size: 0.85rem; min-height: 1.1em; }
+  body.pw-locked > *:not(#pw-gate) { display: none !important; }
+</style>
+<div id="pw-gate">
+  <form id="pw-gate-form" autocomplete="off">
+    <h1>This dashboard is password protected</h1>
+    <input type="password" id="pw-gate-input" placeholder="Password" autofocus />
+    <button type="submit">Enter</button>
+    <div class="pw-error" id="pw-gate-error"></div>
+  </form>
+</div>
+<script>
+(function() {
+  var STORAGE_KEY = "ncaa-dashboard-authed-v1";
+  var EXPECTED_HASH = "52ba68719e66f92fdf5637bc289d6a643b921f0aad9ec2a42e00ec912d2bb722";
+
+  function unlock() {
+    document.body.classList.remove("pw-locked");
+    var gate = document.getElementById("pw-gate");
+    if (gate) {
+      gate.remove();
+    }
+  }
+
+  function sha256Hex(text) {
+    var enc = new TextEncoder().encode(text);
+    return crypto.subtle.digest("SHA-256", enc).then(function(buf) {
+      return Array.from(new Uint8Array(buf))
+        .map(function(b) { return b.toString(16).padStart(2, "0"); })
+        .join("");
+    });
+  }
+
+  if (sessionStorage.getItem(STORAGE_KEY) === EXPECTED_HASH) {
+    unlock();
+    return;
+  }
+
+  document.body.classList.add("pw-locked");
+
+  document.getElementById("pw-gate-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+    var val = document.getElementById("pw-gate-input").value;
+    sha256Hex(val).then(function(hash) {
+      if (hash === EXPECTED_HASH) {
+        sessionStorage.setItem(STORAGE_KEY, EXPECTED_HASH);
+        unlock();
+      } else {
+        document.getElementById("pw-gate-error").textContent = "Incorrect password.";
+      }
+    });
+  });
+})();
+</script>
+
     
     <div style="height: 100vh; width: 100vw" id="root"></div>
     

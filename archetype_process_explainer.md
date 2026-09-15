@@ -200,6 +200,55 @@ Archetype scores are fit-within-role scores. They should not be treated as perfe
 
 The current weights are basketball-informed starting points. They should be adjusted as the player pools are reviewed and compared against film.
 
+## Triton Zone and Triton WAR
+
+The Triton Zone is the coaching staff's own set of statistical targets. A player is "in the zone" when they clear all seven at once:
+
+- **eFG%** — 50% or better
+- **3PT%** — 36% or better
+- **3PA/FGA** (three-point rate) — 45% or better
+- **Turnover rate** — 15% or lower
+- **2PT%** — 55% or better
+- **Defensive rebound rate** — 15% or better
+- **Offensive rebound rate** — 6% or better
+
+Clearing all seven at once is rare, so a pure pass/fail screen leaves almost nobody to talk about and no way to rank the near-misses. **Triton WAR** turns the same seven targets into a single 0-100 fit score instead.
+
+Each metric is scored on its own before anything is combined:
+
+- Hitting the target exactly is worth **70** on that metric.
+- Clearing it comfortably scores above 70, reaching **100** one spread past the target.
+- Missing it scores below 70, reaching **0** one and a half spreads short.
+
+The spread is measured once from the D-I rotation pool (10+ minutes per game), so it reflects how much players actually differ on that metric — a point of three-point percentage and a point of offensive rebound rate are not treated as the same size of miss. The curve is continuous at the target, so nudging a threshold nudges the score rather than flipping it.
+
+Triton WAR is the weighted average of those seven sub-scores. The default weights are:
+
+- **eFG%** — 20
+- **3PT%** — 18
+- **3PA/FGA** — 15
+- **Turnover rate** — 15
+- **2PT%** — 12
+- **Defensive rebound rate** — 12
+- **Offensive rebound rate** — 8
+
+These are starting points, not settled numbers. Both the targets and the weights are adjustable on the Triton WAR tab, and the weights are normalised, so only their sizes relative to each other matter.
+
+### Archetype filters
+
+Two archetypes sit on top of the zone as extra gates. They do not change a player's Triton WAR — they narrow who appears on the board.
+
+- **Stretch Big** — 6'9" or taller, 34% or better from three, on a 40% or better three-point rate.
+- **3PT Specialist** — 65% or more of shot attempts from three, at better than 35%.
+
+Both sets of criteria are adjustable alongside the zone thresholds. "Archetype must also clear the full Triton Zone" additionally requires all seven zone targets.
+
+### Reading the tracker
+
+The board is ranked by Triton WAR. Each row shows the seven zone metrics with the cleared ones highlighted, plus a running count of how many targets the player clears. Sorting by a column re-orders the board without renumbering the ranks, which stay in Triton WAR order.
+
+Triton WAR is D-I only. D-II and D-III do not carry the rate stats the zone is defined on (turnover rate, offensive and defensive rebound rate), and a score built on substitutes would not be comparable.
+
 ## Recommended Workflow
 
 1. **Choose an archetype from Filter Mode.** Start with General Player for a broad screen, or choose PG / Combo Guard, 2-4 Interchangeable Wing, or 5 / Stretch 4 / Big Wing for a stricter qualified pool.
