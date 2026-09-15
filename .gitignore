@@ -1,3 +1,12 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+
+# D-II scrape artifacts: cached page source and bulk outputs are regenerable
+# (scripts/scrape_d2_seasons.py). The seed list and README are tracked.
+data/d2/raw/
+data/d2/d2_players_raw.csv
+data/d2/d2_player_seasons.csv
+data/d2/scrape_manifest.csv
+data/d2/transfers_backfill.csv
+data/d2/transfers_unmatched.csv

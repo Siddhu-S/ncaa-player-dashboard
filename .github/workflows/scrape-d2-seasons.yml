@@ -1,0 +1,73 @@
+name: Scrape D-II seasons
+
+# Manual-only: this walks ~290 school athletics sites per season, so it is a
+# deliberate backfill run, not something to fire on every push. Results are
+# uploaded as artifacts rather than auto-committed -- a backfill should be
+# eyeballed (check scrape_manifest.csv) before it lands in the repo.
+on:
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: "Season range or list, e.g. 2021-22:2025-26"
+        required: true
+        default: "2021-22:2025-26"
+      delay:
+        description: "Seconds between requests (be polite)"
+        required: false
+        default: "1.5"
+      limit:
+        description: "Only first N schools (leave blank for all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    # ~290 schools x 5 seasons x ~2s is well over the 6h default; cap it here
+    # so a hung run fails loudly instead of burning the whole budget.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pandas numpy
+
+      - name: Unit tests (offline)
+        run: python tests/test_d2_scrape.py
+
+      - name: Scrape seasons
+        run: |
+          python scripts/scrape_d2_seasons.py \
+            --seasons "${{ inputs.seasons }}" \
+            --delay "${{ inputs.delay }}" \
+            ${{ inputs.limit && format('--limit {0}', inputs.limit) || '' }} \
+            --verbose
+
+      - name: Derive rate stats
+        run: python scripts/build_d2_rate_stats.py
+
+      - name: Coverage report
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          m = pd.read_csv("data/d2/scrape_manifest.csv")
+          print("parse_status by season:")
+          print(pd.crosstab(m.season, m.parse_status).to_string())
+          bad = m[m.parse_status != "ok"]
+          print(f"\n{len(bad)} school-seasons need attention")
+          print(bad[["season","team","host","fetch_status","parse_status"]]
+                .head(40).to_string(index=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: d2-seasons
+          path: |
+            data/d2/d2_players_raw.csv
+            data/d2/d2_player_seasons.csv
+            data/d2/scrape_manifest.csv
+          retention-days: 14
