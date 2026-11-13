@@ -14,10 +14,12 @@ days since the last published run, and dates with due retries. The job
 validates SportsDataverse and ESPN box scores separately, compares the
 fields BPM uses, and logs disagreements for review. ESPN roster aliases
 must match uniquely by team, jersey, surname, and first initial when a
-full-name match fails. When reported minutes conflict or a box fails
-validation, the job can replay ESPN substitutions if every period,
-lineup, and player point total checks out. Counting-stat conflicts stay
-in review. RAPM can fall back
+full-name match fails. Previously verified name variants also require the
+audited ESPN and NCAA jerseys. When reported minutes conflict or a box
+fails validation, the job can use playing time reconstructed from ESPN
+substitutions after checking every period, lineup, and player point total.
+If both boxes provide counting stats, those stats must agree for the
+replay to resolve the game. RAPM can fall back
 to replaying ESPN starters and substitutions when the NCAA lineup feed
 has no valid game. Historical verified corrections ship with the code.
 

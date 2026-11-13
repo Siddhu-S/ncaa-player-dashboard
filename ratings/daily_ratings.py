@@ -17,7 +17,7 @@ from daily_rapm import ESPN, PACIFIC, espn_scoreboards, fetch_json, recover_espn
 from player_ratings import (FEEDS, RELEASES, ROOT, download, feed_rows,
                             key, lineup_ratings, ncaa_date, solve_rapm, unique)
 from rapm_repairs import expected_score
-from rebuild_espn_rapm import espn_game, replay
+from rebuild_espn_rapm import ESPN_NAME_VARIANTS, ESPN_ROSTER_JERSEYS, espn_game, replay
 import ratings_store as store
 
 NCAA = "https://stats.ncaa.org/contests"
@@ -123,6 +123,13 @@ def box_row(game, tid, name, player, minutes, stats, neutral, teams):
     return row
 
 
+def roster_name_parts(name):
+    parts = name.split()
+    while parts and not key(parts[-1]):
+        parts.pop()
+    return parts
+
+
 def ncaa_box(game, rows, teams, neutral):
     result = []
     for raw in rows:
@@ -139,7 +146,7 @@ def ncaa_box(game, rows, teams, neutral):
     return result
 
 
-def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, replayed=None):
+def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids, replayed=None):
     result = []
     neutral = summary["header"]["competitions"][0]["neutralSite"]
     for block in summary["boxscore"]["players"]:
@@ -155,8 +162,9 @@ def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, replayed=Non
                 name = athlete["displayName"]
                 player = player_ids.get((team, key(name)))
                 jersey = athlete.get("jersey")
+                player = player or reviewed_ids.get((team, name, jersey))
                 if not player and jersey is not None:
-                    parts = name.split()
+                    parts = roster_name_parts(name)
                     if len(parts) > 1:
                         player = jersey_ids.get((team, jersey, key(parts[-1]), key(parts[0])[:1]))
                 if not player:
@@ -279,8 +287,15 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
     jersey_ids = unique(
         ((r["team_id"], r["jersey"], key(parts[-1]), key(parts[0])[:1]), r["player_id"])
         for r in roster_rows if r["jersey"].isdigit()
-        for parts in (r["name"].split(), r["clean_name"].split()) if len(parts) > 1
+        for parts in (roster_name_parts(r["name"]), roster_name_parts(r["clean_name"])) if len(parts) > 1
     )
+    roster_by_id = {(r["team_id"], r["player_id"]): r for r in roster_rows}
+    reviewed_ids = {}
+    for (club, name), (player, espn_jersey, _) in ESPN_NAME_VARIANTS.items():
+        team = aliases.get(club)
+        official = roster_by_id.get((team, player))
+        if official and official["jersey"] == ESPN_ROSTER_JERSEYS.get(player, espn_jersey):
+            reviewed_ids[team, name, espn_jersey] = player
     def score_conflict(gid):
         finals = scores[gid]
         return "official_school" not in finals and len({tuple(sorted(s.items())) for s in finals.values()}) > 1
@@ -334,7 +349,7 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
             neutral = summary["header"]["competitions"][0].get("neutralSite", neutral)
             try:
                 candidates["espn"] = valid_box(
-                    espn_box(game, summary, teams, aliases, player_ids, jersey_ids), game, teams)
+                    espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids), game, teams)
             except (KeyError, TypeError, ValueError) as error:
                 errors["espn"] = str(error)
         elif download_error:
@@ -352,24 +367,24 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
             try:
                 played_minutes = replay_minutes(summary, event)
                 replayed_box = valid_box(
-                    espn_box(game, summary, teams, aliases, player_ids, jersey_ids, played_minutes), game, teams)
+                    espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids, played_minutes),
+                    game, teams)
                 ncaa_candidate = candidates.get("ncaa")
                 if not ncaa_candidate and ncaa_rows.get(ncaa):
                     # A partial NCAA box may corroborate counting stats even if its minutes fail.
                     raw_ncaa = ncaa_box(game, ncaa_rows[ncaa], teams, neutral)
                     if box_conflicts(raw_ncaa, replayed_box, compare_minutes=False):
                         raise ValueError("NCAA counting stats differ from the ESPN box")
-                if ncaa_candidate:
-                    if box_conflicts(ncaa_candidate, replayed_box):
-                        raise ValueError("Replayed minutes or counting stats do not corroborate the NCAA box")
-                else:
+                if ncaa_candidate and box_conflicts(ncaa_candidate, replayed_box, compare_minutes=False):
+                    raise ValueError("Replayed box counting stats differ from the NCAA box")
+                if not ncaa_candidate or box_conflicts(ncaa_candidate, replayed_box):
                     candidates["espn"] = replayed_box
                     replay_used = True
                 minutes_review = "ESPN substitution replay validated the playing time"
                 conflicts = []
             except (KeyError, TypeError, ValueError) as error:
                 minutes_review = str(error)
-        chosen = "ncaa" if "ncaa" in candidates else "espn"
+        chosen = "ncaa" if "ncaa" in candidates and not replay_used else "espn"
         box_evidence = dict(evidence, box_sources=sorted(candidates), source_errors=errors, conflicts=conflicts)
         if minutes_review:
             box_evidence["minutes_review"] = minutes_review
