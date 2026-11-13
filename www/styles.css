@@ -606,6 +606,11 @@ html, body {
   background-color: var(--bg-2);
   border-color: var(--rule-2);
 }
+.ratings-filter-help {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
 .ratings-csv-link {
   align-self: flex-end;
   margin: 0 0 12px auto;

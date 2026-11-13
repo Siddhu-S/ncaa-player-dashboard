@@ -22,6 +22,8 @@ COVERAGE_COLUMNS = {
     "season", "through_date", "bpm_through_date", "rapm_through_date", "expected_games",
     "bpm_games_included", "rapm_games_included", "rapm_excluded_possessions",
 }
+DEFAULT_BPM_MINUTES = 5
+DEFAULT_RAPM_POSSESSIONS = 25
 
 
 def ratings_tab_ui():
@@ -38,8 +40,13 @@ def ratings_tab_ui():
                 {"class": "ratings-controls"},
                 ui.input_text("ratings_search", "Player or team", placeholder="Search players or teams"),
                 ui.input_select("ratings_sort", "Rank by", {"rapm": "RAPM", "bpm": "BPM"}),
+                ui.input_numeric("ratings_bpm_min", "Min. BPM minutes", DEFAULT_BPM_MINUTES,
+                                 min=0, step=1, width="9rem"),
+                ui.input_numeric("ratings_rapm_min", "Min. RAPM possessions", DEFAULT_RAPM_POSSESSIONS,
+                                 min=0, step=1, width="11rem"),
                 ui.a("Open CSV", href=CSV_URL, target="_blank", rel="noopener", class_="ratings-csv-link"),
             ),
+            ui.p("Set either minimum to 0 to turn off that filter.", class_="ratings-filter-help"),
             ui.div({"class": "ratings-grid"}, ui.output_data_frame("ratings_table")),
         ),
     )
@@ -112,6 +119,15 @@ def ratings_tab_server(input):
         frame = snapshot.get()
         if frame is None:
             return render.DataGrid(pd.DataFrame(columns=list(PLAYER_COLUMNS.values())), summary=False)
+
+        bpm_min = input.ratings_bpm_min()
+        rapm_min = input.ratings_rapm_min()
+        bpm_min = DEFAULT_BPM_MINUTES if bpm_min is None else max(0, bpm_min)
+        rapm_min = DEFAULT_RAPM_POSSESSIONS if rapm_min is None else max(0, rapm_min)
+        frame = frame.loc[
+            frame["bpm_minutes"].fillna(0).ge(bpm_min)
+            & frame["rapm_possessions"].fillna(0).ge(rapm_min)
+        ]
 
         search = input.ratings_search().strip()
         if search:
