@@ -1,0 +1,37 @@
+name: Daily RAPM
+on:
+  schedule:
+    - cron: '30 7 * * *'
+      timezone: America/Los_Angeles
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'ratings/**'
+      - '.github/workflows/daily-rapm.yml'
+permissions:
+  contents: read
+concurrency:
+  group: daily-rapm
+  cancel-in-progress: false
+jobs:
+  calculate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r ratings/requirements.txt
+      - run: python ratings/daily_rapm.py --output rapm-ratings.json --possessions-output rapm-possessions.json
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: rapm-daily
+          path: |
+            rapm-ratings.json
+            rapm-possessions.json
+          if-no-files-found: error
