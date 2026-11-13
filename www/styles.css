@@ -581,6 +581,9 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* Daily player ratings */
+/* Shinylive sizes its iframe from the app's content. Keep the panel usable
+   even when the frame has already shrunk to the dashboard chrome. */
+#atlas-shell:has(#ratings-tab.active) { min-height: 640px; }
 #ratings-tab.tab-panel.active { overflow-y: auto; }
 .ratings-page {
   width: min(100%, 1280px);
