@@ -19,7 +19,10 @@ audited ESPN and NCAA jerseys. When reported minutes conflict or a box
 fails validation, the job can use playing time reconstructed from ESPN
 substitutions after checking every period, lineup, and player point total.
 If both boxes provide counting stats, those stats must agree for the
-replay to resolve the game. RAPM can fall back
+replay to resolve the game. When an audited school box provides a
+third value for every disputed field, the job uses the value supported
+by two sources, validates the resulting box, and records the votes.
+Unresolved votes stay in review. RAPM can fall back
 to replaying ESPN starters and substitutions when the NCAA lineup feed
 has no valid game. Historical verified corrections ship with the code.
 

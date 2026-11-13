@@ -30,6 +30,19 @@ VERIFIED_FINALS = {
 BOX_FIELDS = dict(two_made="fgm", two_attempts="fga", threes="tpm", three_attempts="tpa",
                   free_throws="ftm", fta="fta", points="pts", orb="orb", drb="drb",
                   assists="ast", turnovers="tov", steals="stl", blocks="blk", fouls="pf")
+MINUTES_COLUMN = 8
+BOX_VOTE_COLUMNS = dict(BOX_COLUMNS, minutes=MINUTES_COLUMN)
+# Each entry records the disputed fields checked against a school game book.
+SCHOOL_BOX_EVIDENCE = {
+    "401922248": (
+        "https://fiusports.com/boxscore.aspx?id=15628&path=mbball",
+        {"11565135": {"minutes": 29}},
+    ),
+    "401924743": (
+        "https://yalebulldogs.com/sports/mens-basketball/stats/2026-27/howard/boxscore/21527",
+        {"11475873": {"three_attempts": 9}, "11481741": {"three_attempts": 2}},
+    ),
+}
 
 
 def matchup(played, home, away):
@@ -212,12 +225,49 @@ def box_conflicts(first, second, *, compare_minutes=True):
                 continue
             conflicts.append(f"{row[48]} is missing from one box")
             continue
-        differences = [stat for stat, column in BOX_COLUMNS.items() if a[player][column] != b[player][column]]
-        if compare_minutes and abs(a[player][8] - b[player][8]) > 1:
-            differences.append("minutes")
+        columns = BOX_VOTE_COLUMNS if compare_minutes else BOX_COLUMNS
+        differences = [stat for stat, column in columns.items()
+                       if not box_values_agree(stat, a[player][column], b[player][column])]
         if differences:
             conflicts.append(f"{a[player][48]} differs in {', '.join(differences)}")
     return conflicts
+
+
+def box_values_agree(stat, first, second):
+    return abs(first - second) <= 1 if stat == "minutes" else first == second
+
+
+def majority_box(ncaa_rows, espn_rows, school_values):
+    """Resolve disputed fields with two agreeing sources and preserve the vote."""
+    if any(detail.endswith(" is missing from one box") for detail in box_conflicts(ncaa_rows, espn_rows)):
+        raise ValueError("Source vote cannot establish the player rows")
+    espn = {(row[47], row[51]): row for row in espn_rows if row[8] > 0}
+    resolved, votes = [], []
+    for row in ncaa_rows:
+        selected = row.copy()
+        other = espn.get((row[47], row[51]))
+        if row[8] > 0 and other is not None:
+            player = row[51].removeprefix("ncaa:")
+            for stat, column in BOX_VOTE_COLUMNS.items():
+                ncaa, reported = row[column], other[column]
+                if box_values_agree(stat, ncaa, reported):
+                    continue
+                school = school_values.get(player, {}).get(stat)
+                if school is None:
+                    raise ValueError(f"No third-source value for {row[48]}: {stat}")
+                supports_ncaa = box_values_agree(stat, ncaa, school)
+                supports_espn = box_values_agree(stat, reported, school)
+                if supports_ncaa == supports_espn:
+                    raise ValueError(f"No unique majority for {row[48]}: {stat}")
+                selected[column] = ncaa if supports_ncaa else reported
+                votes.append(dict(player_id=player, stat=stat, ncaa=ncaa, espn=reported,
+                                  official_school=school, selected=selected[column],
+                                  supported_source="ncaa" if supports_ncaa else "espn"))
+        resolved.append(selected)
+    # Keep the complete box when the votes all support the same feed.
+    if votes and all(vote["supported_source"] == "espn" for vote in votes):
+        return espn_rows, votes
+    return resolved, votes
 
 
 def replay_minutes(summary, event):
@@ -361,6 +411,19 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
                 errors["ncaa"] = str(error)
         conflicts = box_conflicts(*candidates.values()) if len(candidates) == 2 else []
         reported_conflicts = conflicts
+        school = SCHOOL_BOX_EVIDENCE.get(event)
+        majority = None
+        if conflicts and school:
+            url, school_values = school
+            evidence["source_urls"] = sorted(set(evidence["source_urls"]) | {url})
+            sources[gid].append(dict(provider="official_school_box", provider_game_id=event, url=url))
+            try:
+                resolved, votes = majority_box(candidates["ncaa"], candidates["espn"], school_values)
+                candidates["source_majority"] = valid_box(resolved, game, teams)
+                majority = {"url": url, "votes": votes}
+                conflicts = []
+            except ValueError as error:
+                majority = {"url": url, "error": str(error)}
         minutes_review = None
         replay_used = False
         if summary and neutral is not None and (conflicts or not candidates):
@@ -385,7 +448,12 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
             except (KeyError, TypeError, ValueError) as error:
                 minutes_review = str(error)
         chosen = "ncaa" if "ncaa" in candidates and not replay_used else "espn"
+        if "source_majority" in candidates:
+            chosen = "source_majority"
         box_evidence = dict(evidence, box_sources=sorted(candidates), source_errors=errors, conflicts=conflicts)
+        if majority:
+            box_evidence["source_majority"] = majority
+            box_evidence["reported_box_conflicts"] = reported_conflicts
         if minutes_review:
             box_evidence["minutes_review"] = minutes_review
             box_evidence["reported_box_conflicts"] = reported_conflicts
