@@ -604,8 +604,6 @@ html, body {
   border-color: var(--rule-2);
 }
 .ratings-heading .btn {
-  width: auto !important;
-  height: auto !important;
   color: var(--accent);
   background: var(--bg-2);
   border: 1px solid var(--rule-2);

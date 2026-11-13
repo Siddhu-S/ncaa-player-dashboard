@@ -32,7 +32,8 @@ def ratings_tab_ui():
             ui.div(
                 {"class": "ratings-heading"},
                 ui.div(ui.h2("Player Ratings"), ui.output_ui("ratings_status")),
-                ui.download_button("ratings_csv", "Download CSV"),
+                ui.a("Open CSV", href=CSV_URL, target="_blank", rel="noopener",
+                     class_="btn"),
             ),
             ui.div(
                 {"class": "ratings-controls"},
@@ -80,7 +81,7 @@ def ratings_tab_server(input):
             return
         try:
             raw = await asyncio.wait_for(fetch_csv(), timeout=20)
-            snapshot.set((raw, read_ratings(raw)))
+            snapshot.set(read_ratings(raw))
             error.set(False)
         except (OSError, ValueError, RuntimeError):
             error.set(True)
@@ -91,7 +92,7 @@ def ratings_tab_server(input):
         if current is None:
             return ("The ratings CSV is unavailable. Reopen the tab to retry."
                     if error.get() else "Loading the daily ratings…")
-        meta = current[1].iloc[0]
+        meta = current.iloc[0]
         season = int(meta["season"])
         expected = int(meta["expected_games"])
         return ui.TagList(
@@ -108,11 +109,10 @@ def ratings_tab_server(input):
 
     @render.data_frame
     def ratings_table():
-        current = snapshot.get()
-        if current is None:
+        frame = snapshot.get()
+        if frame is None:
             return render.DataGrid(pd.DataFrame(columns=list(PLAYER_COLUMNS.values())), summary=False)
 
-        frame = current[1]
         search = input.ratings_search().strip()
         if search:
             matches = frame["player_name"].str.contains(search, case=False, regex=False, na=False)
@@ -122,9 +122,3 @@ def ratings_tab_server(input):
         frame = frame.sort_values([order, "player_name", "team"], ascending=[False, True, True])
         display = frame[list(PLAYER_COLUMNS)].round({"bpm": 2, "rapm": 2}).rename(columns=PLAYER_COLUMNS)
         return render.DataGrid(display, height="min(58vh, 670px)", width="100%", summary=False)
-
-    @render.download(filename="player-ratings.csv")
-    def ratings_csv():
-        current = snapshot.get()
-        if current is not None:
-            yield current[0]
