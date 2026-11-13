@@ -7,6 +7,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.error import HTTPError
 from zoneinfo import ZoneInfo
 
 from player_ratings import (FEEDS, RELEASES, TORVIK, download, feed_rows, game_logs,
@@ -62,6 +63,50 @@ def missing_matchups(inputs, season, cutoff, known, roster, teams):
     return missing, team_boxes
 
 
+def espn_scoreboards(days, scratch):
+    def fetch(day):
+        path = scratch / f"scoreboard-{day}.json"
+        if path.exists():
+            return json.loads(path.read_text())["events"]
+        return fetch_json(f"{ESPN}/scoreboard?dates={day:%Y%m%d}&groups=50&limit=500", path)["events"]
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        yield from pool.map(fetch, days)
+
+
+def scoreboard_matchups(inputs, scratch, season, cutoff, known, teams):
+    team_ids = unique(
+        (r[f"{side}_espn_team_id"], r[f"{side}_ncaa_team_id"])
+        for r in feed_rows(inputs, "pbp", season) for side in ("home", "away")
+        if r[f"{side}_espn_team_id"] and r[f"{side}_ncaa_team_id"] in teams
+    )
+    by_name = unique((key(name), team) for team, name in teams.items())
+    first = min(date.fromisoformat(g["game_date"]) for g, _ in known.values())
+    days = [first + timedelta(days=i) for i in range((cutoff - first).days + 1)]
+    covered = {(date.fromisoformat(g["game_date"]), frozenset((g["home_team_id"], g["away_team_id"])))
+               for g, _ in known.values()}
+    missing = {}
+    for board in espn_scoreboards(days, scratch):
+        for event in board:
+            if event["id"] in known or not event["status"]["type"]["completed"]:
+                continue
+            played = datetime.fromisoformat(event["date"]).astimezone(PACIFIC).date()
+            if played > cutoff:
+                continue
+            scores = {}
+            for club in event["competitions"][0]["competitors"]:
+                team = club["team"]
+                team_id = team_ids.get(team["id"]) or by_name.get(key(team["location"]))
+                if team_id:
+                    scores[team_id] = int(club["score"])
+            if len(scores) != 2 or any((played + timedelta(days=shift), frozenset(scores)) in covered
+                                       for shift in (-1, 0, 1)):
+                continue
+            names = {teams[t]: score for t, score in scores.items()}
+            missing[played, frozenset(names.items())] = names
+    return missing, teams
+
+
 def recover_espn(inputs, scratch, season, missing, team_boxes, known):
     if not missing:
         return None, []
@@ -72,31 +117,25 @@ def recover_espn(inputs, scratch, season, missing, team_boxes, known):
     )
     names = unique((key(t), t) for t in team_boxes.values())
 
-    def scoreboard(day):
-        payload = fetch_json(f"{ESPN}/scoreboard?dates={day:%Y%m%d}&groups=50&limit=500",
-                             scratch / f"scoreboard-{day}.json")
-        return payload["events"]
-
     days = sorted({day + timedelta(days=offset) for day, _ in missing for offset in (0, 1)})
     matches = defaultdict(dict)
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        for board in pool.map(scoreboard, days):
-            for event in board:
-                if event["id"] in known or not event["status"]["type"]["completed"]:
-                    continue
-                played = datetime.fromisoformat(event["date"]).astimezone(PACIFIC).date()
-                sides = {}
-                for club in event["competitions"][0]["competitors"]:
-                    team = club["team"]
-                    name = espn_ids.get(team["id"]) or names.get(key(team["location"]))
-                    sides[club["homeAway"]] = name, int(club["score"])
-                if set(sides) != {"home", "away"}:
-                    continue
-                for offset in (0, -1, 1):
-                    match = played + timedelta(days=offset), frozenset(sides.values())
-                    if match in missing:
-                        matches[match][event["id"]] = sides
-                        break
+    for board in espn_scoreboards(days, scratch):
+        for event in board:
+            if event["id"] in known or not event["status"]["type"]["completed"]:
+                continue
+            played = datetime.fromisoformat(event["date"]).astimezone(PACIFIC).date()
+            sides = {}
+            for club in event["competitions"][0]["competitors"]:
+                team = club["team"]
+                name = espn_ids.get(team["id"]) or names.get(key(team["location"]))
+                sides[club["homeAway"]] = name, int(club["score"])
+            if set(sides) != {"home", "away"}:
+                continue
+            for offset in (0, -1, 1):
+                match = played + timedelta(days=offset), frozenset(sides.values())
+                if match in missing:
+                    matches[match][event["id"]] = sides
+                    break
 
     rows, gaps = [], []
     for match, score in missing.items():
@@ -135,7 +174,8 @@ def recover_espn(inputs, scratch, season, missing, team_boxes, known):
         writer = csv.DictWriter(file, fieldnames=list(ready[0]))
         writer.writeheader()
         writer.writerows(ready)
-    reconstruct(inputs, scratch, matches_path, destination, report, season)
+    reconstruct(inputs, scratch, matches_path, destination, report, season,
+                use_torvik=(inputs / "torvik-games.json.gz").exists())
     with report.open(newline="") as file:
         for row in csv.DictReader(file):
             if row["issue"]:
@@ -196,9 +236,17 @@ def main():
             for name in FEEDS:
                 tag = f"ncaa_mbb_{name}"
                 download(f"{RELEASES}/{tag}/{tag}_{season}.csv.gz", inputs / f"{name}.csv.gz")
-            download(f"{TORVIK}/{season}_all_advgames.json.gz", inputs / "torvik-games.json.gz")
+            try:
+                download(f"{TORVIK}/{season}_all_advgames.json.gz", inputs / "torvik-games.json.gz")
+            except HTTPError as error:
+                if error.code != 403:
+                    raise
+                print("Torvik returned HTTP 403. Checking completed D-I games against ESPN scoreboards.")
         ratings, roster, teams, through = lineup_ratings(inputs, season, cutoff, game_observer=remember)
-        missing, team_boxes = missing_matchups(inputs, season, cutoff, known, roster, teams)
+        if (inputs / "torvik-games.json.gz").exists():
+            missing, team_boxes = missing_matchups(inputs, season, cutoff, known, roster, teams)
+        else:
+            missing, team_boxes = scoreboard_matchups(inputs, scratch, season, cutoff, known, teams)
         recovered, gaps = recover_espn(inputs, scratch, season, missing, team_boxes, known)
         if recovered is not None:
             known.clear()

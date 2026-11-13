@@ -332,7 +332,7 @@ def replay(plays, players, final):
     return possessions, minutes, bad_seconds, actor_errors, technical_points
 
 
-def reconstruct(inputs, sources, match_file, destination, report_file, season=2027):
+def reconstruct(inputs, sources, match_file, destination, report_file, season=2027, *, use_torvik=True):
     team_names = {row["id"]: row["team"] for row in feed_rows(inputs, "team_ids", season)}
     espn_to_ncaa = unique(
         (row[f"{side}_espn_team_id"], row[f"{side}_ncaa_team_id"])
@@ -399,7 +399,7 @@ def reconstruct(inputs, sources, match_file, destination, report_file, season=20
         ("249", "Cash Chavis"): ("12151866", "1", 126524),
     }
     box_games = defaultdict(dict)
-    for row in game_logs(inputs, season, False):
+    for row in game_logs(inputs, season, False) if use_torvik else ():
         box_games[row[0], row[47], row[5]][key(row[48])] = row
 
     with match_file.open(newline="", encoding="utf-8") as source:
@@ -427,9 +427,9 @@ def reconstruct(inputs, sources, match_file, destination, report_file, season=20
                     raise ValueError(f"unmapped team {team} (ESPN {club})")
                 team_ids[club] = team_id
                 boxes[club] = box_games[match["date"].replace("-", ""), team, match[f"{opposite}_team"]]
-                if final[club] != int(match[f"box_{side}"]) or sum(
-                    int(row[33]) for row in boxes[club].values()
-                ) != final[club]:
+                if final[club] != int(match[f"box_{side}"]) or (
+                    use_torvik and sum(int(row[33]) for row in boxes[club].values()) != final[club]
+                ):
                     raise ValueError(f"independent team score mismatch for {team}")
 
             observations, minutes, bad_seconds, actor_errors, tech = replay(plays, players, final)
@@ -468,7 +468,7 @@ def reconstruct(inputs, sources, match_file, destination, report_file, season=20
                     known_difference = {"5105401": 3, "4894452": -3}.get(player)
                     if event != "401921747" or source_points - int(box[33]) != known_difference:
                         raise ValueError(f"Independent player scoring mismatch for {name}")
-                if box is None and (source_points or (actual > 1 and target)):
+                if use_torvik and box is None and (source_points or (actual > 1 and target)):
                     raise ValueError(f"Missing player box for {name}")
                 diff = None if box is None else round(actual - float(box[8]), 3)
                 discrepancies.append((round(actual - source_minutes, 3), diff, name))
@@ -477,10 +477,10 @@ def reconstruct(inputs, sources, match_file, destination, report_file, season=20
             report["non_five_player_seconds"] = bad_seconds
             report["actor_conflicts"] = sum(actor_errors.values())
             report["source_max_minute_error"] = max(abs(row[0]) for row in discrepancies)
-            report["torvik_max_minute_error"] = max(abs(row[1]) for row in discrepancies if row[1] is not None)
+            report["torvik_max_minute_error"] = max((abs(row[1]) for row in discrepancies if row[1] is not None), default=None)
             report["minute_review"] = "; ".join(
-                f"{name} ({source_diff:+.2f} source, {box_diff:+.2f} Torvik)"
-                for source_diff, box_diff, name in discrepancies if box_diff is not None and abs(box_diff) > 1
+                f"{name} ({source_diff:+.2f} source, {box_diff if box_diff is not None else 'unavailable'} Torvik)"
+                for source_diff, box_diff, name in discrepancies if abs(source_diff if box_diff is None else box_diff) > 1
             )
             counts = Counter(owner for _, owner, _, _, _ in observations)
             report["home_possessions"] = counts[teams["home"]]
