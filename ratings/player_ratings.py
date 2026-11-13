@@ -173,12 +173,12 @@ def backfill_games(season, cutoff, roster, accepted_espn_ids, accepted_matchups,
         if game_observer is not None:
             game_observer(event, played, home, away, tuple(int(first[f"{side}_score"]) for side in SIDES),
                           "backfill", [(int(row["period"]), float(row["clock"]), *obs)
-                                       for row, obs in zip(rows, observations)])
+                                       for row, obs in zip(rows, observations)], 0)
         yield f"espn:{event}", played, observations
 
 
 def lineup_ratings(directory, season, cutoff, game_status=None, *, game_observer=None,
-                   extra_backfill=None):
+                   extra_backfill=None, fit=True):
     team_names = {row["id"]: row["team"] for row in feed_rows(directory, "team_ids", season)}
     roster = {
         (row["team_id"], row["player_id"]): row["clean_name"] or row["name"]
@@ -318,7 +318,7 @@ def lineup_ratings(directory, season, cutoff, game_status=None, *, game_observer
             if game_observer is not None:
                 game_observer(first.get("espn_game_id") or f"ncaa:{game_id}", played, home, away,
                               score, "NCAA", [(int(period), None, lineup, scored)
-                                              for (period, _), _, lineup, scored in accepted])
+                                              for (period, _), _, lineup, scored in accepted], len(excluded_observations))
             include(game_id, played, ((lineup, scored) for _, _, lineup, scored in accepted))
 
     primary_count = len(accepted_dates)
@@ -329,12 +329,19 @@ def lineup_ratings(directory, season, cutoff, game_status=None, *, game_observer
         season, cutoff, roster, accepted_espn_ids, accepted_matchups, paths, game_observer
     ):
         include(game_id, played, observations)
+    if not fit:
+        return roster, team_names
     if not groups:
         raise ValueError(f"No validated D-I lineup games. Exclusions {dict(rejected)}")
     print(f"RAPM accepted {primary_count}/{len(games)} primary feed games and "
           f"{len(accepted_dates) - primary_count} backfill games, "
           f"{sum(value[0] for value in groups.values())} possessions. Primary feed exclusions {dict(rejected)}")
 
+    ratings = solve_rapm(groups, exposures, appearances, last_dates, roster, team_names)
+    return ratings, roster, team_names, max(accepted_dates).isoformat()
+
+
+def solve_rapm(groups, exposures, appearances, last_dates, roster, team_names):
     players = sorted(exposures)
     index = {player: i for i, player in enumerate(players)}
     size = len(players)
@@ -370,7 +377,7 @@ def lineup_ratings(directory, season, cutoff, game_status=None, *, game_observer
         }
         for i, player in enumerate(players)
     }
-    return ratings, roster, team_names, max(accepted_dates).isoformat()
+    return ratings
 
 
 def join_players(bpm, rapm, roster, ncaa_teams, season):

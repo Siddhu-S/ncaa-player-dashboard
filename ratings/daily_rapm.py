@@ -222,7 +222,7 @@ def main():
     cutoff = min(args.cutoff or today - timedelta(days=1), date(season, 6, 30))
     known = {}
 
-    def remember(game, played, home, away, score, source, observations):
+    def remember(game, played, home, away, score, source, observations, excluded):
         if game in known:
             raise ValueError(f"Duplicate RAPM game {game}")
         known[game] = (dict(season=season, game_id=game, game_date=played.isoformat(), source=source,

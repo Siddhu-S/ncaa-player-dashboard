@@ -135,7 +135,7 @@ def restore_mikalauskas(sides, player_id):
     arlington.append(player)
 
 
-def season_bpm(game_rows, season, cutoff):
+def season_bpm(game_rows, season, cutoff, *, include_box_id=False):
     games = defaultdict(lambda: defaultdict(list))
     mikalauskas_id = "ncaa:11641617"
     for row in game_rows:
@@ -190,7 +190,7 @@ def season_bpm(game_rows, season, cutoff):
         for team, rows, (minutes, stats) in zip((first, second), (first_box, second_box), boxes):
             for i in np.flatnonzero(minutes > 0):
                 source_id = str(rows[i][51])
-                player_id = source_id if source_id.startswith("ncaa:") else str(int(rows[i][51]))
+                player_id = source_id if ":" in source_id else str(int(rows[i][51]))
                 player = totals[team][player_id]
                 player.update({stat: values[i] for stat, values in stats.items()})
                 player.update(minutes=minutes[i], possessions=pace * 5 * minutes[i] / minutes.sum(),
@@ -217,7 +217,8 @@ def season_bpm(game_rows, season, cutoff):
         for i, (player_id, counts) in enumerate(players.items()):
             result[player_id, team] = {
                 "player_name": names[team, player_id], "team": team,
-                "torvik_player_id": "" if player_id.startswith("ncaa:") else player_id,
+                "torvik_player_id": "" if ":" in player_id else player_id,
+                **({"box_player_id": player_id} if include_box_id else {}),
                 "bpm": bpm[i], "bpm_games": counts["games"],
                 "bpm_minutes": round(float(minutes[i]), 1),
                 "bpm_last_game": last_dates[team, player_id].isoformat(),
