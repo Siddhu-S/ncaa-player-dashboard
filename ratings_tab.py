@@ -31,14 +31,14 @@ def ratings_tab_ui():
             {"class": "ratings-page"},
             ui.div(
                 {"class": "ratings-heading"},
-                ui.div(ui.h2("Player Ratings"), ui.output_ui("ratings_status")),
-                ui.a("Open CSV", href=CSV_URL, target="_blank", rel="noopener",
-                     class_="btn"),
+                ui.h2("Player Ratings"),
+                ui.output_ui("ratings_status"),
             ),
             ui.div(
                 {"class": "ratings-controls"},
                 ui.input_text("ratings_search", "Player or team", placeholder="Search players or teams"),
                 ui.input_select("ratings_sort", "Rank by", {"rapm": "RAPM", "bpm": "BPM"}),
+                ui.a("Open CSV", href=CSV_URL, target="_blank", rel="noopener", class_="ratings-csv-link"),
             ),
             ui.div({"class": "ratings-grid"}, ui.output_data_frame("ratings_table")),
         ),

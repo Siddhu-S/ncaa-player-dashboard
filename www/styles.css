@@ -587,14 +587,14 @@ html, body {
   margin: 0 auto;
   padding: 24px clamp(16px, 4vw, 48px);
 }
-.ratings-heading,
 .ratings-controls {
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 12px 20px;
 }
-.ratings-heading { justify-content: space-between; margin-bottom: 16px; }
+.ratings-heading { margin-bottom: 16px; }
+#ratings_status { height: auto !important; }
 .ratings-heading h2 { font: 600 clamp(28px, 4vw, 40px)/1.15 var(--serif); }
 #ratings_status p { margin: 5px 0 0; color: var(--ink-2); }
 .ratings-controls .shiny-input-container { width: auto; margin: 0 0 12px; }
@@ -603,7 +603,11 @@ html, body {
   background-color: var(--bg-2);
   border-color: var(--rule-2);
 }
-.ratings-heading .btn {
+.ratings-csv-link {
+  align-self: flex-end;
+  margin: 0 0 12px auto;
+  padding: 6px 12px;
+  border-radius: 4px;
   color: var(--accent);
   background: var(--bg-2);
   border: 1px solid var(--rule-2);
