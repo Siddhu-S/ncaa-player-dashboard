@@ -3,6 +3,7 @@ import argparse
 import csv
 import hashlib
 import json
+from math import floor
 import os
 import tempfile
 from collections import Counter, defaultdict
@@ -34,6 +35,34 @@ MINUTES_COLUMN = 8
 BOX_VOTE_COLUMNS = dict(BOX_COLUMNS, minutes=MINUTES_COLUMN)
 # Each entry records the disputed fields checked against a school game book.
 SCHOOL_BOX_EVIDENCE = {
+    "401906770": (
+        "https://floridagators.com/documents/download/2026/11/9/2026.11.10_atFloridaState.pdf",
+        {"11472071": {"minutes": 16.5}},
+    ),
+    "401910994": (
+        "https://bgsufalcons.com/sports/mens-basketball/stats/2026-27/georgia-state/boxscore/25167",
+        {"11949562": {"minutes": 27}},
+    ),
+    "401928996": (
+        "https://valpoathletics.com/boxscore.aspx?id=13220&path=mbball",
+        {"11476962": {"minutes": 36}},
+    ),
+    "401921174": (
+        "https://utmsports.com/sports/mens-basketball/stats/2026-27/iu-indy/boxscore/13870",
+        {"11473125": {"minutes": 22}},
+    ),
+    "401921175": (
+        "https://iuindyjags.com/sports/mens-basketball/stats/2026-2027/southern-indiana/boxscore/17460",
+        {"11564819": {"minutes": 11}},
+    ),
+    "401920692": (
+        "https://gobobcats.com/sports/mens-basketball/stats/2026/vermont/boxscore/23634",
+        {"12145104": {"minutes": 4}},
+    ),
+    "401920842": (
+        "https://gobluehose.com/sports/mens-basketball/stats/2026-27/st-thomas/boxscore/14480",
+        {"11476335": {"minutes": 17}},
+    ),
     "401922248": (
         "https://fiusports.com/boxscore.aspx?id=15628&path=mbball",
         {"11565135": {"minutes": 29}},
@@ -237,6 +266,15 @@ def box_values_agree(stat, first, second):
     return abs(first - second) <= 1 if stat == "minutes" else first == second
 
 
+def school_vote_agrees(stat, feed, school):
+    if stat == "minutes":
+        # Whole-minute reports can corroborate a precise time at their precision.
+        if float(feed).is_integer() or float(school).is_integer():
+            return floor(feed + 0.5) == floor(school + 0.5)
+        return abs(feed - school) <= 1 / 60
+    return feed == school
+
+
 def majority_box(ncaa_rows, espn_rows, school_values):
     """Resolve disputed fields with two agreeing sources and preserve the vote."""
     if any(detail.endswith(" is missing from one box") for detail in box_conflicts(ncaa_rows, espn_rows)):
@@ -255,8 +293,8 @@ def majority_box(ncaa_rows, espn_rows, school_values):
                 school = school_values.get(player, {}).get(stat)
                 if school is None:
                     raise ValueError(f"No third-source value for {row[48]}: {stat}")
-                supports_ncaa = box_values_agree(stat, ncaa, school)
-                supports_espn = box_values_agree(stat, reported, school)
+                supports_ncaa = school_vote_agrees(stat, ncaa, school)
+                supports_espn = school_vote_agrees(stat, reported, school)
                 if supports_ncaa == supports_espn:
                     raise ValueError(f"No unique majority for {row[48]}: {stat}")
                 selected[column] = ncaa if supports_ncaa else reported
