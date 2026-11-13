@@ -1167,6 +1167,12 @@ h1 span { color: var(--gold); }
   </div>
 </header>
 
+<div class="method-bar">
+  <strong>Methodology:</strong>&nbsp;
+  BPR from Barttorvik BPM · conference strength translated from 2025-26 team AdjEM ·
+  ORtg anchored to UCSD actual AdjOE 107.8 · click any player for team context and scouting notes
+</div>
+
 <div class="layout">
   <!-- ROSTER PANEL -->
   <div class="roster-panel">
@@ -1594,6 +1600,7 @@ h1 span { color: var(--gold); }
   <div class="eyebrow" id="drawer-tag">Player Profile</div>
   <div class="drawer-name" id="drawer-name">—</div>
   <div class="drawer-sub" id="drawer-sub">—</div>
+  <div id="drawer-teamctx" style="padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:10px;"></div>
   <div class="drawer-stats" id="drawer-stats"></div>
   <div class="drawer-note" id="drawer-note"></div>
 </div>
@@ -1608,6 +1615,7 @@ window.storage = {
   },
   set: async (key, value) => { localStorage.setItem(key, value); },
 };
+const WATCHLIST_STORAGE_KEY = 'ucsd_watchlist_lineup_candidates_v2';
 
 // ─── PLAYER DATA ───────────────────────────────────────────────
 let PORTAL_PLAYERS = []; // populated from ucsd_model_data.json (real available-transfer players)
@@ -1617,13 +1625,84 @@ let PORTAL_PLAYERS = []; // populated from ucsd_model_data.json (real available-
 // live from this dashboard's own dataset (see ucsd_model_data.json),
 // expressed relative to the Big West. Populated by loadModelData().
 let CONF_STRENGTH = {};
+const UCSD_ADJ_OE = 107.8;
+const UCSD_ADJ_DE = 103.5;
+const UCSD_ADJ_EM = 4.30;
+const A_EFG = 52.6;
+const A_TO = 17.0;
+const A_OR = 25.6;
+const A_FTR = 31.2;
+const OBPM_BASE = 0.421;
+
+function normalizeConferenceKey(conf) {
+  const key = String(conf || "bw").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const aliases = {
+    bigwest: "bw",
+    big10: "b10",
+    bigten: "b10",
+    big12: "b12",
+    bigtwelve: "b12",
+    bigeast: "be",
+    americaeast: "ae",
+    asun: "asun",
+    atlantic10: "a10",
+    horizon: "horz",
+    summit: "sum",
+    sunbelt: "sb",
+    southern: "sc",
+    southland: "slnd",
+    patriot: "pat",
+    nznbl: "other",
+    juco: "other",
+    d2: "other",
+  };
+  return aliases[key] || key || "bw";
+}
+
 function confAdj(rawBpr, theirConf) {
-  // Barttorvik's BPM/PORPAG are already opponent/schedule-adjusted (that's
-  // the point of T-Rank), so no further conference delta is added here --
-  // doing so would double-count strength of schedule. CONF_STRENGTH is kept
-  // around purely as a labeled context figure (e.g. the portal tab's conf
-  // badge), never blended into a player's rating.
-  return +rawBpr.toFixed(1);
+  const key = normalizeConferenceKey(theirConf);
+  const bw = toFiniteNumber(CONF_STRENGTH.bw, 0);
+  const delta = toFiniteNumber(CONF_STRENGTH[key], bw) - bw;
+  return +(toFiniteNumber(rawBpr, 0) + delta * 0.20).toFixed(1);
+}
+
+function playerTeamOE(player) {
+  return toFiniteNumber(player && (player.teamOE ?? player.oe), UCSD_ADJ_OE);
+}
+
+function adjTSof(player) {
+  return toFiniteNumber(player && player.ts, 54) - (playerTeamOE(player) - UCSD_ADJ_OE) * 0.18;
+}
+
+function effOBPMof(player) {
+  if (!player) return 0;
+  const key = normalizeConferenceKey(player.fromConf);
+  const bw = toFiniteNumber(CONF_STRENGTH.bw, 0);
+  const delta = (toFiniteNumber(CONF_STRENGTH[key], bw) - bw) * 0.20;
+  return toFiniteNumber(player.obpr, 0) + delta;
+}
+
+function shooterCount(list, weights) {
+  const totalWeight = weights.reduce((a, b) => a + b, 0) || 1;
+  let score = 0;
+  list.forEach((player, index) => {
+    if (player && toFiniteNumber(player.threePct, 0) >= 33 && toFiniteNumber(player.threeRate, 0) >= 0.25) {
+      score += (weights[index] / totalWeight) * 5;
+    }
+  });
+  return score;
+}
+
+function calcORtgV2(efg, to, rawOr, ftr, weightedObpm, shooters) {
+  const orb = 27.0 + (rawOr - 27.0) * 0.55;
+  const talent = Math.max(-6, Math.min(6, (weightedObpm - OBPM_BASE) * 1.15));
+  const spacing = Math.max(-3, Math.min(3, (shooters - 2.5) * 1.40));
+  return UCSD_ADJ_OE
+    + (efg - A_EFG) * 1.75
+    - (to - A_TO) * 0.85
+    + (orb - A_OR) * 0.30
+    + (ftr - A_FTR) * 0.12
+    + talent + spacing;
 }
 
 // showAdjusted toggle state
@@ -1664,6 +1743,169 @@ function getEffectiveBpr(player) {
 }
 
 let PLAYERS = {}; // populated from ucsd_model_data.json by loadModelData()
+let WATCHLIST_POTENTIALS = [];
+
+function toFiniteNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function formatSignedStat(value, digits = 1) {
+  const num = toFiniteNumber(value, 0);
+  return `${num > 0 ? '+' : ''}${num.toFixed(digits)}`;
+}
+
+function formatStat(value, digits = 1) {
+  return toFiniteNumber(value, 0).toFixed(digits);
+}
+
+function htmlEscape(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function activeWatchlistIds() {
+  const active = new Set(lineup.filter(Boolean));
+  Object.values(benchMinutes || {}).forEach((value) => {
+    if (typeof value === 'string' && value) active.add(value);
+  });
+  if (Array.isArray(nmPlayers)) {
+    nmPlayers.forEach((player) => {
+      if (player && player._pid) active.add(player._pid);
+    });
+  }
+  return active;
+}
+
+function normalizeWatchlistCandidate(candidate) {
+  if (!candidate || !candidate.lineupId) return null;
+  return {
+    id: String(candidate.lineupId),
+    sourceId: String(candidate.sourceId || candidate.lineupId),
+    name: String(candidate.name || 'Unknown Player'),
+    team: String(candidate.team || ''),
+    conf: String(candidate.conf || ''),
+    division: String(candidate.division || ''),
+    num: candidate.num ?? '–',
+    pos: String(candidate.pos || 'G/F'),
+    yr: String(candidate.yr || ''),
+    ht: String(candidate.ht || '—'),
+    htIn: toFiniteNumber(candidate.htIn, 0),
+    bpr: toFiniteNumber(candidate.bpr, 0),
+    adjBpr: toFiniteNumber(candidate.adjBpr ?? candidate.bpr, toFiniteNumber(candidate.bpr, 0)),
+    obpr: toFiniteNumber(candidate.obpr, 0),
+    dbpr: toFiniteNumber(candidate.dbpr, 0),
+    prpgi: toFiniteNumber(candidate.prpgi, 0),
+    ts: toFiniteNumber(candidate.ts, 0),
+    usg: toFiniteNumber(candidate.usg, 0),
+    threeRate: toFiniteNumber(candidate.threeRate, 0),
+    threePct: toFiniteNumber(candidate.threePct, 0),
+    arate: toFiniteNumber(candidate.arate, 0),
+    torate: toFiniteNumber(candidate.torate, 0),
+    stl: toFiniteNumber(candidate.stl, 0),
+    blk: toFiniteNumber(candidate.blk, 0),
+    dreb: toFiniteNumber(candidate.dreb, 0),
+    oreb: toFiniteNumber(candidate.oreb, 0),
+    ftr: toFiniteNumber(candidate.ftr, 0),
+    indDrtg: toFiniteNumber(candidate.indDrtg, 102.5),
+    note: String(candidate.note || ''),
+    isPotential: true,
+    isWatchlistPotential: true,
+  };
+}
+
+function applyWatchlistPotentials(candidates) {
+  const nextCandidates = Array.isArray(candidates)
+    ? candidates.map(normalizeWatchlistCandidate).filter(Boolean)
+    : [];
+  const nextIds = new Set(nextCandidates.map((candidate) => candidate.id));
+  const protectedIds = activeWatchlistIds();
+
+  Object.entries(PLAYERS).forEach(([id, player]) => {
+    if (!player || !player.isWatchlistPotential) return;
+    if (nextIds.has(id)) return;
+    if (protectedIds.has(id)) {
+      player.isPotential = false;
+      player.isWatchlistPotential = false;
+      return;
+    }
+    delete PLAYERS[id];
+  });
+
+  WATCHLIST_POTENTIALS = nextCandidates;
+  nextCandidates.forEach((candidate) => {
+    PLAYERS[candidate.id] = {
+      ...PLAYERS[candidate.id],
+      ...candidate,
+    };
+  });
+
+  const rosterEl = document.getElementById('roster-list');
+  if (rosterEl) renderRosterPanel();
+}
+
+function readWatchlistPotentialsFromStorage() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn('Unable to read watchlist lineup candidates', err);
+    return [];
+  }
+}
+
+function readWatchlistPotentialsFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('watchlist');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function readWatchlistPotentialsFromParent() {
+  try {
+    if (!window.parent || window.parent === window) return null;
+    const node = window.parent.document.getElementById('watchlist-lineup-data');
+    if (!node) return null;
+    const raw = (node.textContent || '').trim();
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+window.addEventListener('message', (event) => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type !== 'ucsd-watchlist-lineup-sync') return;
+  applyWatchlistPotentials(event.data.payload);
+});
+
+window.addEventListener('storage', (event) => {
+  if (event.key !== WATCHLIST_STORAGE_KEY) return;
+  applyWatchlistPotentials(readWatchlistPotentialsFromStorage());
+});
+
+let lastParentWatchlistPayload = '';
+function syncWatchlistPotentialsFromParent() {
+  const candidates = readWatchlistPotentialsFromParent();
+  if (!Array.isArray(candidates)) return;
+  const nextKey = JSON.stringify(candidates);
+  if (nextKey === lastParentWatchlistPayload) return;
+  lastParentWatchlistPayload = nextKey;
+  applyWatchlistPotentials(candidates);
+}
 
 
 // Helper: display name (Last name, or First Initial. Last if ambiguous)
@@ -1697,6 +1939,167 @@ const SLOT_LABELS = ['PG', 'SG', 'SF', 'PF', 'C'];
 let MODEL_DATA = null;
 let ORTG_MODEL = null;
 
+const BOSS_NOTE_OVERRIDES = {
+  beath: `Beath is UCSD's most complete two-way player. His steal rate and block production at 6-8 give the lineup elite wing defense. <strong>Key concern:</strong> TS% dipped in conference play and 3PT% at 32.9% limits his spacing value. With Suutela providing interior presence, Beath can shift to a more off-ball role next year, which should <strong>improve his efficiency</strong>. His combination of rebounding (5.1 RPG) and assist creation (15.0 ARate) makes him one of the more versatile forwards in the Big West.`,
+  beattie: `The engine of this team. Beattie led the team in assists in conference play (3.4 APG) and logged the most minutes per game (31.4). His <strong>ARate of 20.5 is legitimately elite</strong> for a mid-major guard. The concern: his 3PT% dropped to 27.0% in conference play. Adding Dotson as a second playmaker takes pressure off Beattie and could unlock more off-ball movement for him. His <strong>steal rate (2.4) is exceptional</strong> and gives this team a pressure defense identity.`,
+  chaikin: `The most underrated player on this roster. Chaikin shot <strong>42.4% from 3 in conference play on real volume (50-118 attempts)</strong>. His 3PT attempt rate of 76% means he's almost purely a perimeter player, the ideal complement to interior finishers. <strong>Low DBPR (0.6)</strong> means he's a defensive liability — in a lineup with Beath and Beattie providing defensive presence, Chaikin's shooting value outweighs the risk.`,
+  burke: `Burke's overall TS% of 57.0 is solid, but his <strong>3PT% in conference play dropped to 23.5%</strong> (12-51). His FT rate shows he can create contact. His best role next season is as a <strong>defensive wing off the bench</strong> — especially with Chaikin and Dotson as more reliable perimeter threats. If his 3PT% regresses to the mean, he becomes a real asset.`,
+  vance: `Vance has an intriguing physical profile — 6-6 with a <strong>block rate of 3.3% and steal rate of 3.2%</strong>. He only played 24 games but flashed real defensive upside. Strong candidate for a <strong>breakout sophomore season</strong>.`,
+  vukicevic: `A 7-footer who shot <strong>60.0% from 2 on limited volume</strong>. His <strong>FT% of 50%</strong> is a late-game liability. At 7-0 with a 2.8 block rate, he changes the geometry of the defense. Best role: 12-18 minute interior specialist.`,
+  pendleton: `Pendleton's TS% of 35.9 is the most significant red flag on the roster. His block rate (3.6%) shows rim protection value. With Suutela and Vukicevic in the program, his path to meaningful minutes narrows — best as a <strong>defensive specialist in specific matchups</strong>.`,
+  brooks: `<strong>Returning — UCSD (Big West), Fr → Jr · PG/SG · 6-0 · #11.</strong> Brooks appeared in 18 games in 2024-25 in a limited role (4.2 MPG, 0 starts). His advanced metrics are striking for the sample size — <strong>PRPG! of +3.6 is the highest on the roster</strong>, driven by an elite <strong>TORate of just 7.9%</strong> (extremely low for any guard at any level).<br><br>
+    <strong>Shooting:</strong> 32.1% on 9-28 three-point attempts — adequate but limited volume. FT% of 100% (1-1) is too small to be meaningful. TS% of 50.0% reflects below-average efficiency overall.<br><br>
+    <strong>Context:</strong> The sample is very small (18 games, ~4 min/game) — treat PRPG! as a high-variance signal, not a projection. His standout metrics are ball security (TORate 7.9%) and defensive activity (STL% 2.9%). <strong>Key upside:</strong> If he can earn rotation minutes, his ball security profile is exactly what a team with Barno's TORate of 16.6% needs as a backup PG.`,
+  dotson: `<strong>Excellent addition.</strong> Dotson's conference ARate of 18.9 ranked #21 nationally. He's a high-volume 3PT shooter (62-163, 38.0%) who can also create off the dribble. TORate of 17.4% is the main concern. <strong>MVC → Big West conf. adjustment: +${confAdj(-1.2,'mvc')}</strong> (MVC is meaningfully stronger than Big West). Fits perfectly as a <strong>complementary playmaker next to Beattie</strong>.`,
+  suutela: `<strong>The most impactful addition on the roster.</strong> Suutela's TS% of 63.7 is elite — driven by 65.1% 2PT shooting. His <strong>conference TS% of 62.1 (ranked #13 nationally)</strong> at Oregon State (WCC) proves this isn't a soft-competition number. <strong>WCC → Big West conf. adjustment: +${confAdj(-1.7,'wcc')}</strong> — WCC is nearly 5 points stronger than the Big West in conference quality, meaning his raw BPM significantly understates his expected Big West impact. <strong>In lineups with Chaikin and Dotson spacing the floor, Suutela at the 4/5 becomes one of the most efficient scoring options in the Big West.</strong>`,
+  barno: `<strong>Portal target — FGCU (ASUN), So → Jr.</strong> Barno was a full-time starter in 2025-26, averaging 11.7 PPG and 5.0 APG in 31.6 MIN/G across all 34 games. His <strong>ARate of 28.1 (conf rank #6)</strong> is elite. ORtg of 105.3 at 22.1% usage is solid for an ASUN guard.<br><br>
+    <strong>Competition context:</strong> ASUN is comparable to the Big West — adjustment is minimal. His <strong>STL% of 2.6</strong> is a standout defensive metric. FTRate of 38.7 shows he attacks the rim.<br><br>
+    <strong>Key concerns:</strong> TS% of 50.5 is below average — 3PT% of 29.6% is a spacing liability; TORate of 16.6 is elevated. <strong>Key upside:</strong> Elite playmaker at 6-0; passing vision and defensive activity address real roster needs.`,
+  eaglestaff: `<strong>Committed — WVU (B12) 2025-26 + NoDak (Summit) 2024-25 · Sr · SG/SF · 6-6 · #5.</strong> Two-season blend: 60% B12 / 40% Summit by minutes. Raw BPM +2.8, adjBPM +9.56. High-volume 3PT shooter (57% of FGA from 3, 35.5% blended). DR% improved dramatically at WVU (8.6→15.9). Best fit: 3-and-D wing starter.`,
+  holmes: `<strong>Incoming Freshman — Canterbury Rams (NZ NBL) 2025-26 · Fr · PF/SF · 6-8 · #15.</strong> Played 20 games at 22.3 mpg as a teenager against grown professionals in New Zealand's top league, going 16-4. That context matters more than the raw line: holding a real rotation role in a pro league at his age is a genuine development signal.<br><br><strong>Directly computed from box score:</strong> TS% 58.2% · eFG% 55.0% · 3PT% 34.4% on 21-61 · 2P% 58.3% (35-60) · FT% 68.1% · FTRate 38.8 · 3P rate 0.50 — a 6-8 forward taking half his shots from three and finishing at 58% inside.<br><br><strong>Profile:</strong> Efficient, low-mistake stretch four. TORate of 11.3% is excellent, and the 58.2 TS% on a 19.4 usage says he picks his spots well rather than forcing. Fills the Beath/Suutela archetype with more perimeter range than either.<br><br><strong style="color:var(--red)">Estimation caveat — read these numbers differently than the rest of the roster.</strong> NZ NBL does not publish possession data, so every rate stat here (USG, TORate, ARate, STL%, BLK%, OReb%, DReb%, and therefore indDrtg 99.0) is derived from per-game box scores using an assumed 74 possessions per 40 minutes. Rebounding rates in particular swing several points on that assumption — DReb% lands anywhere from 18.2 to 23.9 depending on pace. Conservative ends of each range were used. There is also no Barttorvik BPM for this league; the +1.5 raw BPM is an estimate from the box score, not a measured value.<br><br><strong>League strength:</strong> NZ NBL is set at −1.00 vs Big West — near-neutral, and the single softest number in this profile. Unlike the D1 conference values, which are measured from 365 teams of AdjEM data, there is no shared opponent pool to calibrate a foreign pro league against. Treat his adj BPM of +0.5 as a placeholder that should be revised the moment there are D1 minutes to look at.`,
+  johnson: `<strong>Potential Addition — Calhoun Community College (NJCAA D1, Alabama), Jr · PG/SG · 6-3.</strong> Johnson is one of the more intriguing JUCO prospects on the board. His raw D2 numbers are exceptional across the board — the key question is how much translates to Big West competition.<br><br>
+
+    <strong style="font-size:10px; letter-spacing:0.1em;">JUCO RAW STATS (2025-26) — 31 GP, 31 GS:</strong>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin:6px 0;">
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">3PT%</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px; color:var(--green);">43.5%</div><div style="font-size:7px; color:var(--muted);">40-92</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">FT%</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">79.1%</div><div style="font-size:7px; color:var(--muted);">110-139</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">TS%</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">58.0%</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">AST/TO</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">142/64</div><div style="font-size:7px; color:var(--muted);">2.2:1</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">PPG</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">17.0</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">RPG</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">5.7</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">APG</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">4.6</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">STL</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">2.2</div></div>
+    </div>
+
+    <strong style="font-size:10px; letter-spacing:0.1em;">D1/BIG WEST PROJECTION MODEL:</strong>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:6px 0;">
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:6px 8px;">
+        <div style="font-size:7px; color:var(--muted); letter-spacing:0.1em; margin-bottom:3px;">FLOOR · 18 MPG</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--red);">4.6 PPG · 1.8 APG</div>
+        <div style="font-size:8px; color:var(--muted);">3PT 36.5% · eFG 51.0%</div>
+      </div>
+      <div style="background:rgba(138,95,14,0.06); border:1px solid var(--gold-dim); border-radius:2px; padding:6px 8px;">
+        <div style="font-size:7px; color:var(--gold-dim); letter-spacing:0.1em; margin-bottom:3px;">BASE · 24 MPG</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--gold);">6.8 PPG · 2.6 APG</div>
+        <div style="font-size:8px; color:var(--muted);">3PT 38.0% · eFG 53.5%</div>
+      </div>
+      <div style="background:rgba(21,128,61,0.06); border:1px solid var(--green); border-radius:2px; padding:6px 8px;">
+        <div style="font-size:7px; color:var(--green); letter-spacing:0.1em; margin-bottom:3px;">CEILING · 30 MPG</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--green);">9.3 PPG · 3.4 APG</div>
+        <div style="font-size:8px; color:var(--muted);">3PT 40.0% · eFG 56.0%</div>
+      </div>
+    </div>
+
+    <strong>Why the 3PT% translates:</strong> 43.5% on <strong>92 attempts</strong> across a full 31-game season is not a fluke sample — that's real volume. Conference-only 3PT% of 38.1% on 42 attempts holds up under scrutiny. The projection regresses to 36.5–40.0% at D1 which is still a legitimate floor-spacer range.<br><br>
+    <strong>Passing:</strong> 142 AST vs 64 TO (2.2:1 ratio) is elite creation. ARate projects to ~22% at D1 — a genuine secondary playmaker alongside Barno.<br><br>
+    <strong>Key concerns:</strong> NJCAA D1 competition gap is real — Calhoun CC is a strong JUCO program but Big West defenses are a significant step up. JUCO → D1 transitions have high variance. <strong>Key upside:</strong> A 6-3 guard who shoots 38%+ from 3 on volume, creates at a high rate, and plays elite defense (2.2 STL/g) is exactly the profile UCSD needs.`
+};
+
+const BOSS_STATIC_PLAYERS = {
+  dunn: {
+    name: 'Tyson Dunn', num: 3, pos: 'PG', yr: 'Sr', ht: '6-3',
+    bpr: -3.8, obpr: -1.7, dbpr: -2.1, fromConf: 'mac',
+    prpgi: 0.7, ts: 51.8, usg: 27.9, threeRate: 0.57, threePct: 32.9,
+    arate: 38.9, stl: 2.5, blk: 1.1, dreb: 12.3, htIn: 75,
+    team: 'UC San Diego',
+    note: `Dunn sat out last season (UCSD) after transferring from Buffalo. His 2024-25 Buffalo season shows a <strong>legitimate playmaking profile</strong> — ARate of 38.9 ranked #7 nationally among all guards, and his conference-only ARate of 40.7 ranked #1 in the MAC. He's a true PG who makes the game easier for everyone around him. <strong>TS% of 51.8 is the main concern</strong> — he's a high-volume 3PT shooter (49-149, 32.9%) who needs to tighten shot selection. However, his conference-only 3PT% of 37.6% (conf rank #22) is a meaningfully better signal. <strong>MAC → Big West conf. adjustment: ${confAdj(-3.8,'mac') > 0 ? '+' : ''}${confAdj(-3.8,'mac')}</strong> (MAC is weaker than Big West, so raw BPM overstates difficulty). His 1.5-year absence from game action is the biggest unknown going into next season.`
+  },
+  fakeolavi: {
+    name: 'Fake Olavi', num: 99, pos: 'C/PF', yr: 'So', ht: '6-10',
+    bpr: -1.7, obpr: -1.2, dbpr: -0.4, fromConf: 'wcc',
+    prpgi: 1.0, ts: 63.7, usg: 16.4, threeRate: 0.40, threePct: 34.0,
+    arate: 10.9, torate: 12.0, stl: 1.4, blk: 0.8, dreb: 10.8, oreb: 7.4,
+    ftr: 47.4, htIn: 82,
+    note: `<strong>Potential Addition — Hypothetical projection.</strong> Same base profile as Olavi Suutela (WCC, 6-10, So) but with an upgraded 3PT line: <strong>34.0% on 100 attempts</strong> — higher volume than Suutela's actual profile. The higher 3P rate (40% of FGA vs 26%) meaningfully improves spacing in any lineup he's in.<br><br>
+    <strong>What changes:</strong> At 34%+ from 3 on 40% rate, he qualifies as a ◑ 0.5 "ok shooter" in the spacing model. All other metrics (TS% 63.7, ARate, BLK%, rebounding, FTRate 47.4) are identical to Suutela's actual 2025-26 KenPom profile.`
+  },
+  gharram: {
+    name: 'Yassine Gharram', num: 36, pos: 'PG/SG', yr: 'Sr', ht: '6-3',
+    bpr: 0.5, obpr: 0.0, dbpr: 0.5, fromConf: 'ivy',
+    prpgi: 0.4, ts: 68.4, usg: 16.8, threeRate: 0.46, threePct: 47.1,
+    arate: 36.2, torate: 15.8, stl: 1.4, blk: 1.5, dreb: 23.5, oreb: 5.6,
+    ftr: 15.6, htIn: 75,
+    team: 'Yale',
+    note: `<strong>Potential Addition — Yale (Ivy League), Sr · Wing G · 6-3.</strong> Gharram is one of the most intriguing portal options on the board. His <strong>3PT% of 47.1% on 8-17 attempts in 2024-25</strong> is a small but elite sample — career 29.9% on 20-67 is the honest baseline, but the 2024-25 breakout on higher volume (8-17, 47.1%) is worth watching.<br><br>
+    <strong>What stands out:</strong> <strong>ARate of 36.2%</strong> is among the best on this entire board — elite creation for a wing. TS% of 68.4% is genuinely exceptional. His DREB% of 23.5 is strong for a guard-sized player.<br><br>
+    <strong>Ivy → Big West adjustment:</strong> Ivy League carries a −2.31 conf adjustment vs Big West. Raw BPM of +0.5 adjusts to <strong>${confAdj(0.5,'ivy') > 0 ? '+' : ''}${confAdj(0.5,'ivy')}</strong>. Only 8 games started in 2024-25 (7 games played) — small sample is the key concern.<br><br>
+    <strong>Key concern:</strong> Career 3PT% of 29.9% on 67 attempts means the 47.1% likely regresses significantly. FTRate of 15.6 is very low. <strong>Key upside:</strong> If the 3PT shooting is real, this is an elite-creation wing who spaces the floor and passes — a rare combination.`
+  },
+  ttcarr: {
+    name: 'TT Carr', num: 0, pos: 'PG/SG', yr: 'Fr', ht: '6-0',
+    bpr: 0.2, obpr: -1.1, dbpr: 1.3, fromConf: 'acc',
+    prpgi: 0.9, ts: 48.0, usg: 15.3, threeRate: 0.35, threePct: 25.7,
+    arate: 23.3, torate: 14.0, stl: 1.5, blk: 0.7, dreb: 12.2, oreb: 4.4,
+    ftr: 52.3, htIn: 72,
+    team: 'California',
+    note: `<strong>Potential Addition — Cal (ACC), Fr → So · Combo G · 6-0.</strong> Carr is a high-upside freshman who played 31 games at Cal in a very difficult ACC environment. His <strong>RecruitRank of 63.6</strong> is the highest of any player in the Potential Additions group.<br><br>
+    <strong>ACC → Big West adjustment:</strong> ACC is +14.61 pts stronger than Big West — one of the largest positive adjustments possible. Raw BPM of +0.2 adjusts to <strong>+${confAdj(0.2,'acc').toFixed(1)}</strong>, making him one of the highest-projected players on the board on a conf-adjusted basis.<br><br>
+    <strong>What stands out:</strong> <strong>ARate of 23.3%</strong> is strong for a freshman guard — elite creation instinct. FTRate of 52.3 shows he attacks the rim aggressively. DBPM of +1.3 is a positive defensive signal, and STL% of 1.5 is solid.<br><br>
+    <strong>Key concerns:</strong> TS% of 48.0% is below average — driven by 3PT% of just 25.7% on 9-35 attempts. He is not a floor spacer right now. Conference-only TS% of 43.7% is worse. Freshman with limited role (2 starts, 16.5 MIN). <strong>Key upside:</strong> If shooting develops, this is a legitimate high-major playmaker — ACC-proven freshman with a 63.6 RecruitRank and elite FT-drawing ability.`
+  },
+  lawson: {
+    name: 'Josiah Lawson', num: 2, pos: 'SF/PF', yr: 'So', ht: '6-7',
+    bpr: 3.4, adjBpr: 0.8, obpr: 2.3, dbpr: 1.1, fromConf: 'd2',
+    prpgi: 2.5, ts: 55.5, usg: 18.0, threeRate: 0.30, threePct: 34.1,
+    arate: 9.0, torate: 12.0, stl: 1.8, blk: 0.7, dreb: 11.0, oreb: 6.0,
+    ftr: 30.0, htIn: 79,
+    team: 'Morehouse',
+    d2projection: true,
+    projFloor: { mpg: 18, ppg: 4.8, rpg: 1.5, apg: 0.5, threePct: 34.1, efg: 52.1, ft: 76.0 },
+    projBase: { mpg: 22, ppg: 5.9, rpg: 1.8, apg: 0.6, threePct: 34.1, efg: 52.1, ft: 76.0 },
+    projCeiling: { mpg: 27, ppg: 7.2, rpg: 2.2, apg: 0.7, threePct: 34.1, efg: 52.1, ft: 76.0 },
+    note: `<strong>Potential Addition — Morehouse (NCAA D2), So · SF/PF · 6-7.</strong> Lawson is a D2 prospect with legitimate advanced metrics. His Barttorvik D2 profile: <strong>BPM +3.4, PRPG! +2.5, ORtg 114.7 at 25.4% usage</strong> — numbers that would rank among the best on this roster if they translated cleanly.<br><br>
+
+    <strong style="font-size:10px; letter-spacing:0.1em;">D2 RAW STATS (2025-26):</strong>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin:6px 0;">
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">3PT%</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">37.1%</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">3PA</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">97</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">FT%</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">76.0%</div></div>
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:4px 6px; text-align:center;"><div style="font-size:7px; color:var(--muted);">TS%</div><div style="font-family:'Bebas Neue',sans-serif; font-size:14px;">58.8%</div></div>
+    </div>
+
+    <strong style="font-size:10px; letter-spacing:0.1em;">D1/BIG WEST PROJECTION MODEL:</strong>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin:6px 0;">
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:2px; padding:6px 8px;">
+        <div style="font-size:7px; color:var(--muted); letter-spacing:0.1em; margin-bottom:3px;">FLOOR · 18 MPG</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--red);">4.8 PPG · 1.5 RPG</div>
+        <div style="font-size:8px; color:var(--muted);">3PT 34.1% · eFG 52.1%</div>
+      </div>
+      <div style="background:rgba(138,95,14,0.06); border:1px solid var(--gold-dim); border-radius:2px; padding:6px 8px;">
+        <div style="font-size:7px; color:var(--gold-dim); letter-spacing:0.1em; margin-bottom:3px;">BASE · 22 MPG</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--gold);">5.9 PPG · 1.8 RPG</div>
+        <div style="font-size:8px; color:var(--muted);">3PT 34.1% · eFG 52.1%</div>
+      </div>
+      <div style="background:rgba(21,128,61,0.06); border:1px solid var(--green); border-radius:2px; padding:6px 8px;">
+        <div style="font-size:7px; color:var(--green); letter-spacing:0.1em; margin-bottom:3px;">CEILING · 27 MPG</div>
+        <div style="font-family:'Bebas Neue',sans-serif; font-size:13px; color:var(--green);">7.2 PPG · 2.2 RPG</div>
+        <div style="font-size:8px; color:var(--muted);">3PT 34.1% · eFG 52.1%</div>
+      </div>
+    </div>
+
+    <strong>D2 → Big West context:</strong> Standard conf adjustment doesn't apply — D2 BPM lives in a different scale. Adj BPM of +0.8 is a manual estimate based on your projection model's base case efficiency (eFG 52.1%, TS ~55.5%) mapped to expected Big West production. Treat as a <em>high-variance</em> projection with meaningful upside if he earns 22+ MPG.<br><br>
+    <strong>Key upside:</strong> 6-7 wing who shoots 34%+ from 3 and rebounds — exactly the positional profile UCSD needs off the bench. <strong>Key concern:</strong> D2 → D1 translation has high variance; only 29 games of D2 data as a sophomore.`
+  }
+};
+
+function applyBossPlayerOverlay() {
+  Object.entries(BOSS_NOTE_OVERRIDES).forEach(([id, note]) => {
+    if (PLAYERS[id]) PLAYERS[id].note = note;
+  });
+
+  Object.entries(BOSS_STATIC_PLAYERS).forEach(([id, player]) => {
+    const enriched = {
+      ...player,
+      id,
+      isPotential: true,
+      isBossStatic: true,
+      adjBpr: player.adjBpr ?? confAdj(player.bpr, player.fromConf),
+      confAdj: CONF_STRENGTH[(player.fromConf || '').toLowerCase()] || 0
+    };
+    PLAYERS[id] = PLAYERS[id] ? { ...PLAYERS[id], ...enriched } : enriched;
+  });
+}
+
 async function loadModelData() {
   const res = await fetch('ucsd_model_data.json');
   const data = await res.json();
@@ -1709,6 +2112,7 @@ async function loadModelData() {
     p.adjBpr = confAdj(p.bpr, p.fromConf);
     PLAYERS[id] = p;
   });
+  applyBossPlayerOverlay();
   // Shim field names the existing Portal-tab code (renderPortal/portalAddToLineup) expects.
   PORTAL_PLAYERS = data.portal.map(p => ({
     ...p,
@@ -1722,6 +2126,19 @@ async function loadModelData() {
   PORTAL_PLAYERS.slice(0, 6).forEach(p => {
     PLAYERS[p.id] = { ...p, isPotential: true };
   });
+  const urlWatchlistPotentials = readWatchlistPotentialsFromUrl();
+  const hasUrlWatchlistPotentials = Array.isArray(urlWatchlistPotentials) && urlWatchlistPotentials.length > 0;
+  if (hasUrlWatchlistPotentials) {
+    applyWatchlistPotentials(urlWatchlistPotentials);
+    try {
+      localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(urlWatchlistPotentials));
+    } catch (err) {
+      console.warn('Unable to persist watchlist lineup candidates from URL', err);
+    }
+  } else {
+    applyWatchlistPotentials(readWatchlistPotentialsFromStorage());
+  }
+  syncWatchlistPotentialsFromParent();
   DEFAULT_ROTATION = buildPresetLineup('base').rotation;
 
   const formulaEl = document.getElementById('method-ortg-formula');
@@ -1788,6 +2205,8 @@ function playerRowHtml(id, p, opts) {
   if (opts.badge) badges.push(`<span style="font-size:8px; background:rgba(200,168,75,0.12); color:var(--gold-dim); border-radius:2px; padding:1px 4px; margin-left:4px;">${opts.badge}</span>`);
   if (p.lowSample) badges.push(`<span class="sample-badge" style="font-size:8px; border-radius:2px; padding:1px 4px; margin-left:4px;" title="${p.gp} GP · ${p.mpg} mpg — small sample, ratings unreliable">Low sample</span>`);
   const sub = [p.ht || '—', p.yr || '', p.pos || '', opts.school || ''].filter(Boolean).join(' · ');
+  const tsText = p.ts == null ? '—' : p.ts;
+  const prpgiText = p.prpgi == null ? '—' : `${p.prpgi > 0 ? '+' : ''}${p.prpgi}`;
   return `
     <div class="player-row" data-id="${id}" draggable="true" ondragstart="dragStart(event, '${id}')" ondragend="dragEnd(event)" onclick="openDrawer('${id}')">
       <div class="p-num" style="${numColor}">${p.num != null ? p.num : '–'}</div>
@@ -1798,7 +2217,7 @@ function playerRowHtml(id, p, opts) {
       </div>
       <div>
         <div class="p-bpr ${bprClass}">${bpr > 0 ? '+' : ''}${bpr}</div>
-        <div class="p-ts">TS% ${p.ts} · PRPG! ${p.prpgi > 0 ? '+' : ''}${p.prpgi}</div>
+        <div class="p-ts">TS% ${tsText} · PRPG! ${prpgiText}</div>
       </div>
       <button class="add-btn" onclick="event.stopPropagation(); addToNextSlot('${id}')" id="btn-${id}">+</button>
     </div>`;
@@ -1809,14 +2228,28 @@ function renderRosterPanel() {
   if (!el) return;
   const returners = Object.entries(PLAYERS).filter(([, p]) => !p.isNew && !p.isPotential);
   const newAdds   = Object.entries(PLAYERS).filter(([, p]) => p.isNew && !p.isPotential);
-  const potential = Object.entries(PLAYERS).filter(([, p]) => p.isPotential);
+  const potential = Object.entries(PLAYERS)
+    .filter(([, p]) => p.isPotential)
+    .sort(([, left], [, right]) => {
+      const watchlistDelta = Number(Boolean(right.isWatchlistPotential)) - Number(Boolean(left.isWatchlistPotential));
+      if (watchlistDelta !== 0) return watchlistDelta;
+      return (right.adjBpr ?? right.bpr ?? -999) - (left.adjBpr ?? left.bpr ?? -999);
+    });
 
   let html = '<div class="group-label">Returners</div>';
   html += returners.map(([id, p]) => playerRowHtml(id, p)).join('');
-  html += '<div class="group-label" style="color: var(--gold);">New Additions (2026 transfer portal, committed)</div>';
+  html += '<div class="group-label" style="color: var(--gold);">New Additions (2026-27 roster)</div>';
   html += newAdds.map(([id, p]) => playerRowHtml(id, p, { gold: true, badge: p.fromConf, school: p.priorSchool })).join('');
-  html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — real available (uncommitted) transfers, ranked by BPM</div>';
-  html += potential.map(([id, p]) => playerRowHtml(id, p, { muted: true, school: p.priorSchool + ' (' + p.fromConf + ')' })).join('');
+  html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — portal, watchlist, and curated static players, ranked by BPM</div>';
+  html += potential.map(([id, p]) => {
+    const school = p.isWatchlistPotential
+      ? [p.team, p.conf ? '(' + p.conf + ')' : '', p.division].filter(Boolean).join(' ')
+      : p.isBossStatic
+        ? [p.team || p.priorSchool, p.fromConf ? '(' + p.fromConf + ')' : '', 'Boss list'].filter(Boolean).join(' ')
+      : p.priorSchool + ' (' + p.fromConf + ')';
+    const badge = p.isWatchlistPotential ? 'Watchlist' : (p.isBossStatic ? 'Boss list' : null);
+    return playerRowHtml(id, p, { muted: true, school, badge });
+  }).join('');
   el.innerHTML = html;
 }
 
@@ -2010,41 +2443,44 @@ function updateRatings() {
   // Σ(player effective BPM × their total minutes) / 200
   const playerMinMap = getAllPlayersWithMinutes();
   const totalMinAssigned = Object.values(playerMinMap).reduce((a, b) => a + b, 0);
-  // ── OFFENSIVE RATING — Four Factors, OLS-fit on live D1 data ─────
-  // Coefficients come from ORTG_MODEL (fit by scripts/build_ucsd_lineup_model.py
-  // via least squares over every D1 player-season in the dataset), not
-  // hand-picked weights. Falls back to a neutral no-op model before load.
-  const _M = ORTG_MODEL || { intercept: 0, coefEfg: 0, coefTo: 0, coefOrb: 0, coefFtr: 0 };
+  // ── OFFENSIVE RATING — UCSD-anchored four-factor projection ─────
+  const _activeEntries = totalMinAssigned > 0
+    ? Object.entries(playerMinMap)
+        .filter(([, minutes]) => minutes > 0)
+        .map(([pid, minutes]) => ({ player: PLAYERS[pid], minutes }))
+        .filter((entry) => entry.player)
+    : players.map((player) => ({ player, minutes: 1 }));
+  const _activePl = _activeEntries.map((entry) => entry.player);
+  const _activeWeights = _activeEntries.map((entry) => entry.minutes);
+  const _totalWeight = _activeWeights.reduce((a, b) => a + b, 0) || 1;
+  const _weightedAvg = (fn) => _activeEntries.reduce(
+    (sum, entry) => sum + fn(entry.player) * entry.minutes,
+    0
+  ) / _totalWeight;
 
-  // Active players for rotation-weighted calcs
-  const _activePl = totalMinAssigned > 0
-    ? Object.entries(playerMinMap).filter(([,m])=>m>0).map(([pid])=>PLAYERS[pid]).filter(Boolean)
-    : players;
-
-  // eFG% = TS% × 0.92 (empirical: TS ~8% higher than eFG due to FTs)
-  const _avgTS  = _activePl.reduce((s,p)=>s+(p.ts||54),0) / (_activePl.length||1);
-  const _projEFG = _avgTS * 0.92;
-
-  // TORate: USG-weighted average
-  const _totUSG = _activePl.reduce((s,p)=>s+(p.usg||18),0)||1;
-  const _projTO = _activePl.reduce((s,p)=>s+(p.torate||17)*(p.usg||18),0) / _totUSG;
-
-  // OReb%: minutes-weighted sum × 5 (team rate from individual rates)
+  const _avgTS = _weightedAvg(adjTSof);
+  const _projEFG = _avgTS * 0.935;
+  const _totUSG = _activeEntries.reduce(
+    (sum, entry) => sum + (entry.player.usg || 18) * entry.minutes,
+    0
+  ) || 1;
+  const _projTO = _activeEntries.reduce(
+    (sum, entry) => sum + (entry.player.torate || 17) * (entry.player.usg || 18) * entry.minutes,
+    0
+  ) / _totUSG;
   const _projOR = totalMinAssigned > 0
-    ? Object.entries(playerMinMap).filter(([,m])=>m>0)
-        .reduce((s,[pid,m])=>s+(PLAYERS[pid]?.oreb||0)*(m/200),0)*5
-    : players.reduce((s,p)=>s+(p.oreb||0),0);
+    ? _activeEntries.reduce((sum, entry) => sum + (entry.player.oreb || 0) * (entry.minutes / 200), 0) * 5
+    : players.reduce((sum, player) => sum + (player.oreb || 0), 0);
+  const _projFTR = _weightedAvg((player) => player.ftr || 28);
+  const _weightedOBPM = _activeEntries.reduce(
+    (sum, entry) => sum + effOBPMof(entry.player) * (entry.player.usg || 18) * entry.minutes,
+    0
+  ) / _totUSG;
+  const _shooters = shooterCount(_activePl, _activeWeights);
 
-  // FTRate: simple average
-  const _projFTR = _activePl.reduce((s,p)=>s+(p.ftr||28),0) / (_activePl.length||1);
-
-  function _calcORtg(efg, to, orb, ftr) {
-    return _M.intercept + efg * _M.coefEfg + to * _M.coefTo + orb * _M.coefOrb + ftr * _M.coefFtr;
-  }
-
-  const projOffRtg      = _calcORtg(_projEFG, _projTO, _projOR, _projFTR);
-  const projOffRtgFloor = _calcORtg(_projEFG - 1.5, _projTO + 1.5, _projOR - 2.0, _projFTR - 3.0);
-  const projOffRtgCeil  = _calcORtg(_projEFG + 1.5, _projTO - 1.5, _projOR + 2.0, _projFTR + 3.0);
+  const projOffRtg      = calcORtgV2(_projEFG, _projTO, _projOR, _projFTR, _weightedOBPM, _shooters);
+  const projOffRtgFloor = calcORtgV2(_projEFG - 1.5, _projTO + 1.5, _projOR - 2.0, _projFTR - 3.0, _weightedOBPM, _shooters);
+  const projOffRtgCeil  = calcORtgV2(_projEFG + 1.5, _projTO - 1.5, _projOR + 2.0, _projFTR + 3.0, _weightedOBPM, _shooters);
   let rotationBPM = null;
 
   if (totalMinAssigned > 0) {
@@ -2727,19 +3163,40 @@ function refreshPositionTotal(slotIdx) {
 function openDrawer(id) {
   const p = PLAYERS[id];
   if (!p) return;
+  const bpm = toFiniteNumber(p.bpr, 0);
+  const prpgi = toFiniteNumber(p.prpgi, 0);
+  const composite = getEffectiveBpr(p);
+  const ts = toFiniteNumber(p.ts, 0);
+  const usg = toFiniteNumber(p.usg, 0);
+  const arate = toFiniteNumber(p.arate, 0);
+  const stl = toFiniteNumber(p.stl, 0);
+  const blk = toFiniteNumber(p.blk, 0);
+  const threeRate = toFiniteNumber(p.threeRate, 0) * 100;
   document.getElementById('drawer-tag').textContent = `${p.num != null ? '#' + p.num : ''} ${p.pos} · ${p.yr} · ${p.ht}`;
   document.getElementById('drawer-name').textContent = p.name;
-  document.getElementById('drawer-sub').textContent = `BPR ${p.bpr>0?'+':''}${p.bpr} · TS% ${p.ts} · USG% ${p.usg}`;
+  document.getElementById('drawer-sub').textContent = `BPR ${formatSignedStat(bpm, 2)} · TS% ${formatStat(ts)} · USG% ${formatStat(usg)}`;
+  const sourceTeam = p.priorSchool || p.team || (p.isWatchlistPotential ? p.division : "UC San Diego");
+  const confLabel = p.fromConf || p.conf || "";
+  const adjBpr = confAdj(bpm, confLabel);
+  const teamContext = [
+    sourceTeam ? `<strong>${htmlEscape(sourceTeam)}</strong>` : "",
+    confLabel ? `${htmlEscape(String(confLabel))}` : "",
+    `translated BPM ${formatSignedStat(adjBpr)}`
+  ].filter(Boolean).join(" · ");
+  document.getElementById('drawer-teamctx').innerHTML = `
+    <div style="font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Team Context</div>
+    <div style="font-family:'Crimson Pro',serif;font-size:13px;line-height:1.45;color:var(--muted);">${teamContext}</div>
+  `;
   document.getElementById('drawer-stats').innerHTML = `
-    <div class="ds-cell"><div class="ds-label">BPM</div><div class="ds-val" style="color:${p.bpr>=3?'var(--green)':p.bpr>=1?'var(--gold)':p.bpr>=-1?'var(--muted)':'var(--red)'}">${p.bpr>0?'+':''}${p.bpr}</div></div>
-    <div class="ds-cell"><div class="ds-label">PRPG!</div><div class="ds-val" style="color:${(p.prpgi||0)>=1.5?'var(--green)':(p.prpgi||0)>=0.5?'var(--gold)':(p.prpgi||0)>=-0.5?'var(--muted)':'var(--red)'}">${(p.prpgi||0)>0?'+':''}${(p.prpgi||0).toFixed(1)}</div></div>
-    <div class="ds-cell"><div class="ds-label">Composite</div><div class="ds-val" style="color:${getEffectiveBpr(p)>=2?'var(--green)':getEffectiveBpr(p)>=0?'var(--gold)':'var(--red)'}">${getEffectiveBpr(p)>0?'+':''}${getEffectiveBpr(p)}</div></div>
-    <div class="ds-cell"><div class="ds-label">TS%</div><div class="ds-val" style="color:${p.ts>=58?'var(--green)':p.ts>=54?'var(--gold)':'var(--muted)'}">${p.ts}</div></div>
-    <div class="ds-cell"><div class="ds-label">USG%</div><div class="ds-val">${p.usg}</div></div>
-    <div class="ds-cell"><div class="ds-label">A-Rate</div><div class="ds-val">${p.arate}%</div></div>
-    <div class="ds-cell"><div class="ds-label">STL%</div><div class="ds-val">${p.stl}%</div></div>
-    <div class="ds-cell"><div class="ds-label">BLK%</div><div class="ds-val">${p.blk}%</div></div>
-    <div class="ds-cell"><div class="ds-label">3PT Rate</div><div class="ds-val">${(p.threeRate*100).toFixed(0)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">BPM</div><div class="ds-val" style="color:${bpm>=3?'var(--green)':bpm>=1?'var(--gold)':bpm>=-1?'var(--muted)':'var(--red)'}">${formatSignedStat(bpm, 2)}</div></div>
+    <div class="ds-cell"><div class="ds-label">PRPG!</div><div class="ds-val" style="color:${prpgi>=1.5?'var(--green)':prpgi>=0.5?'var(--gold)':prpgi>=-0.5?'var(--muted)':'var(--red)'}">${formatSignedStat(prpgi)}</div></div>
+    <div class="ds-cell"><div class="ds-label">Composite</div><div class="ds-val" style="color:${composite>=2?'var(--green)':composite>=0?'var(--gold)':'var(--red)'}">${formatSignedStat(composite)}</div></div>
+    <div class="ds-cell"><div class="ds-label">TS%</div><div class="ds-val" style="color:${ts>=58?'var(--green)':ts>=54?'var(--gold)':'var(--muted)'}">${formatStat(ts)}</div></div>
+    <div class="ds-cell"><div class="ds-label">USG%</div><div class="ds-val">${formatStat(usg)}</div></div>
+    <div class="ds-cell"><div class="ds-label">A-Rate</div><div class="ds-val">${formatStat(arate)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">STL%</div><div class="ds-val">${formatStat(stl)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">BLK%</div><div class="ds-val">${formatStat(blk)}%</div></div>
+    <div class="ds-cell"><div class="ds-label">3PT Rate</div><div class="ds-val">${threeRate.toFixed(0)}%</div></div>
   `;
   document.getElementById('drawer-note').innerHTML = p.note;
   document.getElementById('drawer').classList.add('open');
@@ -3578,21 +4035,23 @@ function nmUpdateStats() {
     if (pid) minMap[pid] = (minMap[pid] || 0) + x.m;
   });
 
-  // Reuse the same stat functions as the main panel
-  // eFG% and ORtg via Four Factors
-  const BW_ORTG=106.5, BW_EFG=51.4, BW_TO=17.0, BW_OR=28.0, BW_FTR=32.0;
+  // Reuse the same UCSD-anchored stat functions as the main panel.
   const wAvg = (field) => filled.reduce((s,x)=>s+(x.p[field]||0)*x.m,0)/totalMins;
   const wSum = (field) => filled.reduce((s,x)=>s+(x.p[field]||0)*(x.m/totalMins),0)*5;
 
-  const avgTS   = wAvg('ts');
-  const projEFG = avgTS * 0.92;
+  const avgTS   = filled.reduce((s,x)=>s+adjTSof(x.p)*x.m,0)/totalMins;
+  const projEFG = avgTS * 0.935;
   const totUSG  = filled.reduce((s,x)=>s+(x.p.usg||18),0)||1;
-  const projTO  = filled.reduce((s,x)=>s+(x.p.torate||17)*(x.p.usg||18),0)/totUSG;
+  const projTO  = filled.reduce((s,x)=>s+(x.p.torate||17)*(x.p.usg||18)*x.m,0)
+    / (filled.reduce((s,x)=>s+(x.p.usg||18)*x.m,0)||1);
   const projOR  = wSum('oreb');
   const projFTR = wAvg('ftr');
-  const projORtg = BW_ORTG + (projEFG-BW_EFG)*1.80 - (projTO-BW_TO)*0.90 + (projOR-BW_OR)*0.35 + (projFTR-BW_FTR)*0.15;
-  const projORtgFloor = BW_ORTG + (projEFG-1.5-BW_EFG)*1.80 - (projTO+1.5-BW_TO)*0.90 + (projOR-2-BW_OR)*0.35 + (projFTR-3-BW_FTR)*0.15;
-  const projORtgCeil  = BW_ORTG + (projEFG+1.5-BW_EFG)*1.80 - (projTO-1.5-BW_TO)*0.90 + (projOR+2-BW_OR)*0.35 + (projFTR+3-BW_FTR)*0.15;
+  const weightedOBPM = filled.reduce((s,x)=>s+effOBPMof(x.p)*(x.p.usg||18)*x.m,0)
+    / (filled.reduce((s,x)=>s+(x.p.usg||18)*x.m,0)||1);
+  const projShooters = shooterCount(filled.map(x=>x.p), filled.map(x=>x.m));
+  const projORtg = calcORtgV2(projEFG, projTO, projOR, projFTR, weightedOBPM, projShooters);
+  const projORtgFloor = calcORtgV2(projEFG-1.5, projTO+1.5, projOR-2, projFTR-3, weightedOBPM, projShooters);
+  const projORtgCeil  = calcORtgV2(projEFG+1.5, projTO-1.5, projOR+2, projFTR+3, weightedOBPM, projShooters);
 
   // DRtg: minutes-weighted individual DRtg
   const projDRtg = Object.entries(minMap).reduce((s,[pid,m])=>s+(PLAYERS[pid]?.indDrtg||102.5)*(m/totalMins),0);
@@ -3837,6 +4296,7 @@ async function initApp() {
   Object.assign(benchMinutes, DEFAULT_ROTATION);
   renderConferenceContext();
   renderPortal();
+  setInterval(syncWatchlistPotentialsFromParent, 1000);
   setTimeout(() => { renderBench(); updateRatings(); initSliderFills(); initSavedLineups(); initProjectedStatsCard(); }, 100);
 }
 
