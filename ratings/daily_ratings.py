@@ -33,6 +33,16 @@ BOX_FIELDS = dict(two_made="fgm", two_attempts="fga", threes="tpm", three_attemp
                   assists="ast", turnovers="tov", steals="stl", blocks="blk", fouls="pf")
 MINUTES_COLUMN = 8
 BOX_VOTE_COLUMNS = dict(BOX_COLUMNS, minutes=MINUTES_COLUMN)
+# Verified final stints that the box scores rounded to zero or omitted.
+FINAL_STINT_SECONDS = {
+    "401925684": {"11474138": 8},
+    "401909552": {"11479050": 12, "12154750": 12, "12154773": 12},
+    "401920680": {"11480061": 21},
+    "401920305": {"11956578": 28},
+    "401909716": {"11481290": 17, "11484106": 17},
+    "401909490": {"11477163": 14},
+    "401909553": {"11473671": 29, "12154771": 29},
+}
 # Each entry records the disputed fields checked against a school game book.
 SCHOOL_BOX_EVIDENCE = {
     "401906770": (
@@ -188,9 +198,13 @@ def ncaa_box(game, rows, teams, neutral):
     return result
 
 
-def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids, replayed=None):
+def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids, replayed=None,
+             *, school_rows=()):
     result = []
     neutral = summary["header"]["competitions"][0]["neutralSite"]
+    school_ids = unique(
+        ((row["team_id"], key(row["name"])), row["player_id"]) for row in school_rows
+    )
     for block in summary["boxscore"]["players"]:
         team = aliases.get(block["team"]["id"])
         if team not in (game["home_team_id"], game["away_team_id"]):
@@ -203,6 +217,7 @@ def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids
                 athlete = raw["athlete"]
                 name = athlete["displayName"]
                 player = player_ids.get((team, key(name)))
+                player = player or school_ids.get((team, key(name)))
                 jersey = athlete.get("jersey")
                 player = player or reviewed_ids.get((team, name, jersey))
                 if not player and jersey is not None:
@@ -244,8 +259,72 @@ def valid_box(rows, game, teams):
     return sorted(rows, key=lambda r: (r[47], str(r[51])))
 
 
+def load_school_boxes(season):
+    boxes = defaultdict(list)
+    path = ROOT / f"bpm_school_boxes_{season}.csv"
+    if path.exists():
+        with path.open(newline="", encoding="utf-8") as source:
+            for row in csv.DictReader(source):
+                boxes[row["event"]].append(row)
+    return boxes
+
+
+def school_box(game, rows, teams, neutral):
+    box = [
+        box_row(game, row["team_id"], row["name"], f"ncaa:{row['player_id']}",
+                float(row["minutes"]), {stat: int(row[stat]) for stat in BOX_COLUMNS}, neutral, teams)
+        for row in rows
+    ]
+    return valid_box(box, game, teams)
+
+
+def restore_final_stints(rows, event, observations, roster, game, teams, neutral):
+    stints = FINAL_STINT_SECONDS.get(event)
+    if not stints or not observations:
+        return rows, {}
+    lineups = {player for _, _, lineup, _ in observations for player in lineup}
+    by_id = {row[51]: index for index, row in enumerate(rows)}
+    updated = rows.copy()
+    restored = {}
+    for team, player in sorted(lineups):
+        if player not in stints:
+            continue
+        pid = f"ncaa:{player}"
+        index = by_id.get(pid)
+        if index is not None and rows[index][MINUTES_COLUMN] > 0:
+            continue
+        seconds = stints[player]
+        if index is None:
+            updated.append(box_row(game, team, roster[team, player], pid, seconds / 60,
+                                   dict.fromkeys(BOX_COLUMNS, 0), neutral, teams))
+        else:
+            updated[index] = rows[index].copy()
+            updated[index][MINUTES_COLUMN] = seconds / 60
+        restored[player] = seconds
+    return valid_box(updated, game, teams), restored
+
+
+def school_minutes_with_feed_counts(official, candidates, game, teams):
+    """Use the agreed feed counts when only the school minutes are needed."""
+    ncaa, espn = candidates.get("ncaa"), candidates.get("espn")
+    if not ncaa or not espn or box_conflicts(ncaa, espn, compare_minutes=False):
+        raise ValueError("No feed corroborates all school counting stats")
+    by_player = {(row[47], row[51]): row for row in ncaa}
+    official_players = {(row[47], row[51]) for row in official}
+    active = {player for player, row in by_player.items() if row[8] > 0}
+    if not active <= official_players or not official_players <= by_player.keys():
+        raise ValueError("School box and feeds have different player rows")
+    resolved = []
+    for row in official:
+        count_row = by_player[row[47], row[51]].copy()
+        count_row[MINUTES_COLUMN] = row[MINUTES_COLUMN]
+        resolved.append(count_row)
+    return valid_box(resolved, game, teams)
+
+
 def box_conflicts(first, second, *, compare_minutes=True):
-    a, b = ({(r[47], r[51]): r for r in rows if r[8] > 0} for rows in (first, second))
+    a, b = ({(r[47], r[51]): r for r in rows if r[8] > 0 or any(r[c] for c in BOX_COLUMNS.values())}
+            for rows in (first, second))
     conflicts = []
     for player in sorted(a.keys() | b.keys()):
         if player not in a or player not in b:
@@ -337,6 +416,7 @@ def decision(rows, evidence, stamp, *, reason=None, excluded=0, review=False):
 
 
 def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
+    school_boxes = load_school_boxes(season)
     teams, raw, games, sources, scores, known, ids, aliases = catalog(
         inputs, scratch, season, cutoff, dates, previous)
     ncaa_rows = defaultdict(list)
@@ -431,20 +511,30 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
         event = source_ids.get("espn")
         ncaa = source_ids.get("ncaa")
         summary, download_error = summaries.get(event, (None, None))
+        verified_rows = school_boxes.get(event, ())
         candidates, errors = {}, {}
+        unvalidated = {}
         neutral = venue_by_event.get(event)
         if summary:
-            neutral = summary["header"]["competitions"][0].get("neutralSite", neutral)
+            competition = summary["header"]["competitions"][0]
+            neutral = competition.get("neutralSite", neutral)
+            game_aliases = dict(aliases)
+            if verified_rows:
+                # The catalog already matched the ESPN sides for this event.
+                for side in competition["competitors"]:
+                    game_aliases.setdefault(side["id"], game[f"{side['homeAway']}_team_id"])
             try:
-                candidates["espn"] = valid_box(
-                    espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids), game, teams)
+                unvalidated["espn"] = espn_box(game, summary, teams, game_aliases, player_ids,
+                                               jersey_ids, reviewed_ids, school_rows=verified_rows)
+                candidates["espn"] = valid_box(unvalidated["espn"], game, teams)
             except (KeyError, TypeError, ValueError) as error:
                 errors["espn"] = str(error)
         elif download_error:
             errors["espn"] = download_error
         if ncaa_rows.get(ncaa) and neutral is not None:
             try:
-                candidates["ncaa"] = valid_box(ncaa_box(game, ncaa_rows[ncaa], teams, neutral), game, teams)
+                unvalidated["ncaa"] = ncaa_box(game, ncaa_rows[ncaa], teams, neutral)
+                candidates["ncaa"] = valid_box(unvalidated["ncaa"], game, teams)
             except (KeyError, TypeError, ValueError) as error:
                 errors["ncaa"] = str(error)
         conflicts = box_conflicts(*candidates.values()) if len(candidates) == 2 else []
@@ -488,7 +578,37 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
         chosen = "ncaa" if "ncaa" in candidates and not replay_used else "espn"
         if "source_majority" in candidates:
             chosen = "source_majority"
+        school_review = None
+        if verified_rows and neutral is not None and (conflicts or not candidates):
+            url = verified_rows[0]["url"]
+            timing_sources = {row["minutes_source"] for row in verified_rows}
+            evidence["source_urls"] = sorted(set(evidence["source_urls"]) | {url} | timing_sources)
+            sources[gid].append(dict(provider="official_school_box", provider_game_id=event, url=url))
+            try:
+                official = school_box(game, verified_rows, teams, neutral)
+                agreeing = [source for source, rows in unvalidated.items()
+                            if not box_conflicts(official, rows, compare_minutes=False)]
+                school_review = {"url": url, "counting_stats_confirmed_by": agreeing}
+                if timing_sources != {url}:
+                    school_review["short_appearances"] = [
+                        {"player_id": row["player_id"], "minutes": float(row["minutes"]),
+                         "url": row["minutes_source"]}
+                        for row in verified_rows if row["minutes_source"] != url
+                    ]
+                if not agreeing:
+                    official = school_minutes_with_feed_counts(official, candidates, game, teams)
+                    school_review.update(counting_stats_confirmed_by=["ncaa", "espn"],
+                                         minutes_source="official_school_box",
+                                         school_counting_stats_disagree=True)
+                candidates["official_school_box"] = official
+                chosen = "official_school_box"
+                conflicts = []
+            except (KeyError, TypeError, ValueError) as error:
+                school_review = {"url": url, "error": str(error)}
         box_evidence = dict(evidence, box_sources=sorted(candidates), source_errors=errors, conflicts=conflicts)
+        if school_review:
+            box_evidence["school_box_review"] = school_review
+            box_evidence["reported_box_conflicts"] = reported_conflicts
         if majority:
             box_evidence["source_majority"] = majority
             box_evidence["reported_box_conflicts"] = reported_conflicts
@@ -500,7 +620,17 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
         if conflicts:
             bpm = decision([], box_evidence, stamp, reason="Player box scores disagree", review=True)
         elif chosen in candidates:
-            bpm = decision(candidates[chosen], dict(box_evidence, selected=chosen), stamp)
+            rows = candidates[chosen]
+            if event in FINAL_STINT_SECONDS and gid in observations:
+                try:
+                    rows, restored = restore_final_stints(
+                        rows, event, observations[gid][1], roster, game, teams, neutral)
+                    if restored:
+                        box_evidence["restored_stint_seconds"] = restored
+                        box_evidence["stint_source"] = f"https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/{event}"
+                except ValueError as error:
+                    box_evidence["short_stint_error"] = str(error)
+            bpm = decision(rows, dict(box_evidence, selected=chosen), stamp)
         else:
             bpm = decision([], box_evidence, stamp, reason="No validated player box score and venue",
                            review=bool(errors) and not download_error)
@@ -588,6 +718,8 @@ def main():
     parser.add_argument("--season", type=int)
     parser.add_argument("--cutoff", type=date.fromisoformat)
     parser.add_argument("--inputs", type=Path)
+    parser.add_argument("--recheck-season", action="store_true",
+                        help="Revalidate previously processed games after applying historical corrections")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if not args.dry_run and not os.environ.get("RATINGS_DATABASE_URL"):
@@ -599,6 +731,8 @@ def main():
     previous, due, last_cutoff = ([], [], None) if args.dry_run else store.load_queue(
         season, cutoff, stamp.isoformat())
     dates = {cutoff} | {date.fromisoformat(day) for day in due}
+    if args.recheck_season:
+        dates.update(date.fromisoformat(game["game_date"]) for game in previous)
     if last_cutoff:
         start = date.fromisoformat(last_cutoff)
         dates.update(start + timedelta(days=i) for i in range(1, (cutoff-start).days+1))

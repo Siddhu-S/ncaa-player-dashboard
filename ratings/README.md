@@ -26,6 +26,17 @@ Unresolved votes stay in review. RAPM can fall back
 to replaying ESPN starters and substitutions when the NCAA lineup feed
 has no valid game. Historical verified corrections ship with the code.
 
+`bpm_school_boxes_2027.csv` contains audited official box scores for
+the November 11 backfill. The job checks team scores, player IDs,
+playing time, and counting stats before accepting a school box. When
+both feeds agree on counting stats, verified school minutes can resolve
+a timing dispute while preserving those counts. Rows with an appearance
+rounded to zero in the school box include a play-by-play source for
+the measured seconds.
+After deploying historical corrections, run **Daily BPM and RAPM** with
+**Revalidate previously processed games** enabled to apply them to
+previously accepted games as well as open reviews.
+
 `ratings.game_sources` identifies the evidence attached to each game.
 `ratings.game_metric_status` tracks each metric, its next retry, and its last
 accepted input revision. A failed retry preserves that revision.
