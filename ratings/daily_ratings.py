@@ -22,7 +22,13 @@ from rebuild_espn_rapm import ESPN_NAME_VARIANTS, ESPN_ROSTER_JERSEYS, espn_game
 import ratings_store as store
 
 NCAA = "https://stats.ncaa.org/contests"
+# The NCAA catalog carries an old and a corrected contest for this game.
+SUPERSEDED_CONTESTS = {"6638547": ("6670672", "401920378")}
 VERIFIED_FINALS = {
+    "401920887": ({"627454": 62, "627586": 68},
+                  "https://shupirates.com/sports/mens-basketball/stats/2026-27/charlotte/boxscore/11645"),
+    "401925631": ({"627479": 54, "627295": 56},
+                  "https://bradleybraves.com/boxscore.aspx?id=23039&path=mbball"),
     "401909694": ({"627521": 69, "627524": 113},
                   "https://seminoles.com/sports/mens-basketball/stats/2026/florida-am/boxscore/16827"),
     "401920378": ({"627235": 88, "627342": 93},
@@ -31,6 +37,12 @@ VERIFIED_FINALS = {
 BOX_FIELDS = dict(two_made="fgm", two_attempts="fga", threes="tpm", three_attempts="tpa",
                   free_throws="ftm", fta="fta", points="pts", orb="orb", drb="drb",
                   assists="ast", turnovers="tov", steals="stl", blocks="blk", fouls="pf")
+# Exact provider tags for players verified by team and jersey.
+NCAA_BOX_ALIASES = {
+    ("627449", "KHALI.HORTON"): "11956116",
+    ("627467", "DANIEL.JAMES"): "11485090",
+    ("627563", "SAM.SIMMONS"): "12151923",
+}
 MINUTES_COLUMN = 8
 BOX_VOTE_COLUMNS = dict(BOX_COLUMNS, minutes=MINUTES_COLUMN)
 # Verified final stints that the box scores rounded to zero or omitted.
@@ -45,6 +57,19 @@ FINAL_STINT_SECONDS = {
 }
 # Each entry records the disputed fields checked against a school game book.
 SCHOOL_BOX_EVIDENCE = {
+    "401917524": (
+        "https://lmulions.com/sports/mens-basketball/stats/2026-27/south-alabama/boxscore/17969",
+        {"12154705": {"minutes": 2}, "11644911": {"minutes": 24},
+         "11644936": {"minutes": 22}},
+    ),
+    "401919041": (
+        "https://okstate.com/sports/mens-basketball/stats/2026-27/texas-am/boxscore/17598",
+        {"11645534": {"minutes": 11}},
+    ),
+    "401920064": (
+        "https://gorhody.com/sports/mens-basketball/stats/2026-27/maryland-eastern-shore/boxscore/12014",
+        {"11481744": {"minutes": 17}},
+    ),
     "401906770": (
         "https://floridagators.com/documents/download/2026/11/9/2026.11.10_atFloridaState.pdf",
         {"11472071": {"minutes": 16.5}},
@@ -119,7 +144,12 @@ def catalog(inputs, scratch, season, cutoff, dates, previous):
         if event:
             ids[f"espn:{event}"] = pair
 
-    for row in feed_rows(inputs, "schedule", season):
+    schedule = list(feed_rows(inputs, "schedule", season))
+    final_contests = {r["contest_id"] for r in schedule
+                      if all(r[f"{side}_score"].isdigit() for side in ("home", "away"))}
+    for original, (replacement, espn) in SUPERSEDED_CONTESTS.items():
+        events[original] = events[replacement] = espn
+    for row in schedule:
         played = ncaa_date(row["game_date"])
         if played not in dates or not all(row[f"{side}_score"].isdigit() for side in ("home", "away")):
             continue
@@ -127,6 +157,8 @@ def catalog(inputs, scratch, season, cutoff, dates, previous):
         if not home or not away or home == away:
             continue
         ncaa = row["contest_id"]
+        if ncaa in SUPERSEDED_CONTESTS and SUPERSEDED_CONTESTS[ncaa][0] in final_contests:
+            continue
         remember(played, home, away, expected_score(ncaa, row), "ncaa", ncaa,
                  f"{NCAA}/{ncaa}/box_score", events.get(ncaa))
 
@@ -188,12 +220,13 @@ def ncaa_box(game, rows, teams, neutral):
         team = raw["team_ncaa_team_id"]
         if team not in (game["home_team_id"], game["away_team_id"]):
             raise ValueError("NCAA box has an unresolved team")
-        if not raw["player_id"]:
+        player = raw["player_id"] or NCAA_BOX_ALIASES.get((team, raw["player"]))
+        if not player:
             raise ValueError("NCAA box has an unresolved player")
         stats = {name: float(raw[field]) for name, field in BOX_FIELDS.items()}
         stats["two_made"] -= stats["threes"]
         stats["two_attempts"] -= stats["three_attempts"]
-        result.append(box_row(game, team, raw["clean_name"] or raw["player"], f"ncaa:{raw['player_id']}",
+        result.append(box_row(game, team, raw["clean_name"] or raw["player"], f"ncaa:{player}",
                               float(raw["mins"]), stats, neutral, teams))
     return result
 
@@ -706,11 +739,32 @@ def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *, dry_run=Fa
     coverage["rapm"]["through_date"] = max(latest.values()).isoformat()
     for counts in coverage.values():
         counts["missing_games"] = counts["expected_games"] - counts["included_games"]
+    print(json.dumps(coverage, sort_keys=True))
+    summary_path = os.getenv("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        included = {(gid, metric) for gid, metric, _ in manifest}
+        reasons = {(s["game_key"], s["metric"]): s.get("reason") for s in statuses}
+        with open(summary_path, "a", encoding="utf-8") as summary:
+            print(f"## Ratings coverage through {cutoff}", file=summary)
+            for metric, counts in coverage.items():
+                missing = counts["missing_games"]
+                print(f"\n- {metric.upper()}: {counts['included_games']}/{expected} accepted, "
+                      f"{missing} missing", file=summary)
+                if missing:
+                    print(f"::warning::{metric.upper()} coverage through {cutoff}: {missing} games missing")
+            if any(c["missing_games"] for c in coverage.values()):
+                print("\n| Game date | Game ID | Metric | Reason |\n|---|---|---|---|", file=summary)
+                for gid, played in sorted(dates.items(), key=lambda game: (game[1], game[0]), reverse=True):
+                    for metric in coverage:
+                        if (gid, metric) not in included:
+                            reason = reasons.get((gid, metric)) or "No accepted inputs"
+                            reason = " ".join(reason.split()).replace("|", "&#124;").replace("<", "&lt;")
+                            print(f"| {played} | {gid} | {metric.upper()} | {reason} |", file=summary)
+
     if not dry_run:
         store.publish(dict(season=season, through_date=cutoff.isoformat(), published_at=stamp,
                            model_version="bpm-college-v1+rapm-ridge-2000-v1",
                            coverage=coverage, input_manifest=manifest), players)
-    print(json.dumps(coverage, sort_keys=True))
 
 
 def main():
@@ -730,7 +784,11 @@ def main():
     run_id = os.getenv("GITHUB_RUN_ID", str(uuid4())) + ":" + os.getenv("GITHUB_RUN_ATTEMPT", "1")
     previous, due, last_cutoff = ([], [], None) if args.dry_run else store.load_queue(
         season, cutoff, stamp.isoformat())
-    dates = {cutoff} | {date.fromisoformat(day) for day in due}
+    # A late final may have no row in the retry queue yet. Revisit recent dates
+    # after the feed has had time to post the game.
+    dates = {cutoff - timedelta(days=offset) for offset in range(3)
+             if cutoff - timedelta(days=offset) >= date(season - 1, 7, 1)}
+    dates.update(date.fromisoformat(day) for day in due)
     if args.recheck_season:
         dates.update(date.fromisoformat(game["game_date"]) for game in previous)
     if last_cutoff:

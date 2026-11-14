@@ -45,10 +45,18 @@ SOURCE_NOTES = {
                   "game box. He is included in the replay based on the substitutions.",
                   "https://hawaiiathletics.com/boxscore.aspx?id=31831&path=mbball"),
 }
+# School box scores round these independently verified replay times.
+VERIFIED_REPLAY_MINUTES = {
+    "401911239": ("https://richmondspiders.com/sports/mens-basketball/stats/2026-27/southern-illinois/boxscore/12124",
+                  {"Sam Simmons Jr.": 9, "Brock McClure": 2}),
+    "401921086": ("https://umbcretrievers.com/sports/mens-basketball/stats/2026-27/morgan-state-university/boxscore/9692",
+                  {"Manok Lual": 3, "Matar Wade": 2}),
+}
 ESPN_NAME_VARIANTS = {
     # Same-team aliases checked against roster jerseys and Torvik game boxes.
     ("2065", "Daniel Perez-Rouzan"): ("12156694", "23", 76244),
     ("2514", "Mike Parrotta"): ("12157957", "24", 145562),
+    ("2115", "Daniel James"): ("11485090", "22", None),
     ("2115", "Matt Goodwin"): ("11938443", "6", 144161),
     ("2916", "Mekhi Conner"): ("12148839", "3", 144871),
     ("324", "Q Williams IV"): ("12146992", "4", 144738),
@@ -472,16 +480,26 @@ def reconstruct(inputs, sources, match_file, destination, report_file, season=20
                 if use_torvik and box is None and (source_points or (actual > 1 and target)):
                     raise ValueError(f"Missing player box for {name}")
                 diff = None if box is None else round(actual - float(box[8]), 3)
-                discrepancies.append((round(actual - source_minutes, 3), diff, name))
+                discrepancies.append((round(actual - source_minutes, 3), diff, name, actual))
             report["reconstructed"] = len(observations)
             report["technical_points"] = sum(tech.values())
             report["non_five_player_seconds"] = bad_seconds
             report["actor_conflicts"] = sum(actor_errors.values())
             report["source_max_minute_error"] = max(abs(row[0]) for row in discrepancies)
             report["torvik_max_minute_error"] = max((abs(row[1]) for row in discrepancies if row[1] is not None), default=None)
+            school_url, school_minutes = VERIFIED_REPLAY_MINUTES.get(event, (None, {}))
+            timing_disputes = [
+                (source_diff, box_diff, name)
+                for source_diff, box_diff, name, actual in discrepancies
+                if abs(source_diff if box_diff is None else box_diff) > 1
+                and (name not in school_minutes or abs(actual - school_minutes[name]) > 0.5)
+            ]
+            if school_url and not timing_disputes:
+                report["source_review"] = "Official school box corroborates disputed replay minutes"
+                report["review_source_url"] = school_url
             report["minute_review"] = "; ".join(
                 f"{name} ({source_diff:+.2f} source, {box_diff if box_diff is not None else 'unavailable'} Torvik)"
-                for source_diff, box_diff, name in discrepancies if abs(source_diff if box_diff is None else box_diff) > 1
+                for source_diff, box_diff, name in timing_disputes
             )
             counts = Counter(owner for _, owner, _, _, _ in observations)
             report["home_possessions"] = counts[teams["home"]]

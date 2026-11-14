@@ -9,8 +9,9 @@ with [ratings_writer_grants.sql](sql/ratings_writer_grants.sql) after the
 assumes the login already exists.
 
 The first run discovers completed Division I games from the NCAA schedule
-and ESPN scoreboards. Subsequent runs check yesterday, any missed calendar
-days since the last published run, and dates with due retries. The job
+and ESPN scoreboards. Subsequent runs check the latest three game dates,
+any missed calendar days since the last published run, and dates with due
+retries. The recent window also discovers games posted late by both sources. The job
 validates SportsDataverse and ESPN box scores separately, compares the
 fields BPM uses, and logs disagreements for review. ESPN roster aliases
 must match uniquely by team, jersey, surname, and first initial when a
@@ -49,6 +50,11 @@ close an issue automatically after a successful recheck.
 The model reads accepted revisions from Supabase and publishes the snapshot
 and player rows together in one transaction. The snapshot includes the
 input revisions, coverage counts, model version, and each metric's cutoff.
+Publication fails if a game previously included in the latest snapshot for
+that cutoff or earlier would disappear from either metric. Revision updates
+and newly validated games can still publish. The Actions summary lists
+coverage and each missing game with its reason. The workflow warns about
+gaps even when it can publish the validated data.
 
 ```sql
 select game_date, game_key, metric, evidence
