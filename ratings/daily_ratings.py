@@ -57,6 +57,18 @@ FINAL_STINT_SECONDS = {
 }
 # Each entry records the disputed fields checked against a school game book.
 SCHOOL_BOX_EVIDENCE = {
+    "401927369": (
+        "https://goblueraiders.com/news/2026/11/11/mens-basketball-blue-raiders-get-back-on-track-with-73-68-defeat-of-evansville",
+        {"11471618": {"assists": 5}},
+    ),
+    "401925940": (
+        "https://utahstateaggies.com/sports/mens-basketball/stats/2026-27/utah-tech/boxscore/16847",
+        {"12153060": {"turnovers": 0}, "11472119": {"turnovers": 0}},
+    ),
+    "401928794": (
+        "https://pepperdinewaves.com/sports/mens-basketball/stats/2026/sam-houston/boxscore/16850",
+        {"11481211": {"minutes": 20}},
+    ),
     "401917524": (
         "https://lmulions.com/sports/mens-basketball/stats/2026-27/south-alabama/boxscore/17969",
         {"12154705": {"minutes": 2}, "11644911": {"minutes": 24},
@@ -651,7 +663,11 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
         if replay_used:
             box_evidence["minutes_source"] = "espn_play_by_play"
         if conflicts:
-            bpm = decision([], box_evidence, stamp, reason="Player box scores disagree", review=True)
+            # Both complete boxes already passed validation. Use the NCAA feed
+            # for ties, keeping the disagreement open for a later source vote.
+            bpm = decision(candidates["ncaa"], dict(box_evidence, selected="ncaa",
+                           selection_method="validated_source_default"), stamp,
+                           reason="Validated NCAA box used pending corroboration", review=True)
         elif chosen in candidates:
             rows = candidates[chosen]
             if event in FINAL_STINT_SECONDS and gid in observations:

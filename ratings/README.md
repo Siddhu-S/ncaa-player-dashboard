@@ -23,7 +23,11 @@ If both boxes provide counting stats, those stats must agree for the
 replay to resolve the game. When an audited school box provides a
 third value for every disputed field, the job uses the value supported
 by two sources, validates the resulting box, and records the votes.
-Unresolved votes stay in review. RAPM can fall back
+When two complete boxes pass validation and the available evidence does
+not settle the disagreement, the job includes the NCAA box in BPM. The
+audit records the default and disputed fields and keeps the game open
+for review and retry. Games still need a validated box and resolved final
+score to count. RAPM can fall back
 to replaying ESPN starters and substitutions when the NCAA lineup feed
 has no valid game. Historical verified corrections ship with the code.
 
