@@ -580,51 +580,21 @@ html, body {
 ::-webkit-scrollbar-thumb { background: var(--rule-2); }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* Daily player ratings */
-/* Shinylive sizes its iframe from the app's content. Keep the panel usable
-   even when the frame has already shrunk to the dashboard chrome. */
+/* Ratings uses the Triton Zone leaderboard styles with a narrower table. */
 #atlas-shell:has(#ratings-tab.active) { min-height: 640px; }
 #ratings-tab.tab-panel.active { overflow-y: auto; }
-.ratings-page {
-  width: min(100%, 1280px);
-  margin: 0 auto;
-  padding: 24px clamp(16px, 4vw, 48px);
-}
-.ratings-controls {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 12px 20px;
-}
-.ratings-heading { margin-bottom: 16px; }
-#ratings_status { height: auto !important; }
-.ratings-heading h2 { font: 600 clamp(28px, 4vw, 40px)/1.15 var(--serif); }
-#ratings_status p { margin: 5px 0 0; color: var(--ink-2); }
-.ratings-controls .shiny-input-container { width: auto; margin: 0 0 12px; }
-.ratings-controls input, .ratings-controls input:focus, .ratings-controls select {
-  color: var(--ink);
-  background-color: var(--bg-2);
-  border-color: var(--rule-2);
-}
-.ratings-filter-help {
-  margin: 0 0 12px;
+#ratings-tab .triton-table { min-width: 460px; }
+#ratings-tab .triton-table tbody tr { cursor: default; }
+#ratings-tab .control-label {
+  display: block;
   color: var(--ink-2);
-  font-size: 13px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .10em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
 }
-.ratings-csv-link {
-  align-self: flex-end;
-  margin: 0 0 12px auto;
-  padding: 6px 12px;
-  border-radius: 4px;
-  color: var(--accent);
-  background: var(--bg-2);
-  border: 1px solid var(--rule-2);
-}
-.ratings-grid { overflow-x: auto; }
-#ratings_table {
-  min-width: 680px;
-  color-scheme: dark;
-  --shiny-datagrid-grid-header-bgcolor: var(--bg-2);
-  --shiny-datagrid-grid-body-hover-bgcolor: var(--bg-2);
-  --shiny-datagrid-grid-gridlines-color: var(--rule);
-}
+#ratings_status { height: auto !important; }
+#ratings_status p { margin: 0; }
+#ratings-tab .ratings-csv-link { color: var(--accent); }

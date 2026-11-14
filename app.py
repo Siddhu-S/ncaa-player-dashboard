@@ -7445,7 +7445,7 @@ app_ui = ui.page_fluid(
 
 def server(input, output, session):
 
-    ratings_tab_server(input)
+    ratings_tab_server(input, session)
 
     d1_sel    = reactive.Value(None)
     d1_dim    = reactive.Value(set())
