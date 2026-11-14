@@ -51,6 +51,17 @@ record a resolution and timestamp in `ratings.review_issues`. To reprocess a
 reviewed game, set its metric's `next_retry_at` to `now()`. The pipeline can
 close an issue automatically after a successful recheck.
 
+Each run downloads the season roster and matches listed positions to the
+validated BPM boxes by team and NCAA player ID. BPM blends the position
+estimated from box scores with 50 minutes at the listed default: 1.5 for
+guards, 3.5 for forwards, and 5 for centers. Missing or unsupported labels
+use position 3. The offensive-role default is 4. The snapshot and Actions
+summary report how many BPM players used a roster position or the fallback.
+
+RAPM uses the ten players on the floor and a 90-day half-life for game
+weights. It fits observed scoring with ridge regularization centered at
+zero. The output reports actual possession counts.
+
 The model reads accepted revisions from Supabase and publishes the snapshot
 and player rows together in one transaction. The snapshot includes the
 input revisions, coverage counts, model version, and each metric's cutoff.

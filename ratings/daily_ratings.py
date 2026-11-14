@@ -15,8 +15,8 @@ from uuid import uuid4
 
 from box_plus_minus import BOX_COLUMNS, complete_team_box, season_bpm
 from daily_rapm import ESPN, PACIFIC, espn_scoreboards, fetch_json, recover_espn
-from player_ratings import (FEEDS, RELEASES, ROOT, download, feed_rows,
-                            key, lineup_ratings, ncaa_date, solve_rapm, unique)
+from player_ratings import (FEEDS, RAPM_HALF_LIFE_DAYS, RELEASES, ROOT, download, feed_rows,
+                            key, lineup_ratings, ncaa_date, rapm_game_weight, solve_rapm, unique)
 from rapm_repairs import expected_score
 from rebuild_espn_rapm import ESPN_NAME_VARIANTS, ESPN_ROSTER_JERSEYS, espn_game, replay
 import ratings_store as store
@@ -701,7 +701,19 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp):
         yield game, sources[gid], dict(bpm=bpm, rapm=rapm)
 
 
-def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *, dry_run=False):
+def listed_bpm_positions(roster_rows, teams):
+    # Broad roster labels cover both guard spots and both forward spots.
+    positions = {"G": 1.5, "F": 3.5, "C": 5.0}
+    return unique(
+        ((teams[row["team_id"]], f'ncaa:{row["player_id"]}'), positions[label])
+        for row in roster_rows
+        if row["team_id"] in teams and row["player_id"] and
+        (label := row["position"].strip().upper()) in positions
+    )
+
+
+def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *,
+                    dry_run=False, listed_positions):
     dates = {g["game_key"]: g["game_date"] for g in games}
     expected = len(games)
     coverage = {m: dict(expected_games=expected, included_games=0, review_or_retry=0,
@@ -725,18 +737,21 @@ def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *, dry_run=Fa
         if metric == "bpm":
             boxes.extend(rows)
             continue
+        played = date.fromisoformat(dates[gid])
+        weight = rapm_game_weight(played, cutoff)
         for _, _, lineup, points, names in rows:
             lineup = tuple(tuple(p) for p in lineup)
-            groups[lineup][0] += 1
-            groups[lineup][1] += points
+            groups[lineup][0] += weight
+            groups[lineup][1] += weight * points
             for player, name in zip(lineup, names):
                 roster[player] = name
                 exposures[player] += 1
                 appearances[player].add(gid)
-                latest[player] = max(latest.get(player, date.min), date.fromisoformat(dates[gid]))
+                latest[player] = max(latest.get(player, date.min), played)
     if not boxes or not groups:
         raise ValueError("Both metrics need accepted game inputs before publishing")
-    bpm, bpm_through = season_bpm(boxes, season, cutoff, include_box_id=True)
+    bpm, bpm_through = season_bpm(boxes, season, cutoff, include_box_id=True,
+                                  listed_positions=listed_positions)
     rapm = solve_rapm(groups, exposures, appearances, latest, roster, teams)
     team_ids = unique((name, tid) for tid, name in teams.items())
     combined = {(team_ids[row["team"]], row["box_player_id"].removeprefix("ncaa:")): row
@@ -751,7 +766,10 @@ def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *, dry_run=Fa
                             rapm=row.get("rapm"), details=row))
     if len({p["player_key"] for p in players}) != len(players):
         raise ValueError("BPM and RAPM player identity collision")
-    coverage["bpm"]["through_date"] = bpm_through
+    listed_count = sum((row["team"], row["box_player_id"]) in listed_positions
+                       for row in bpm.values())
+    coverage["bpm"].update(through_date=bpm_through, listed_position_players=listed_count,
+                           fallback_position_players=len(bpm) - listed_count)
     coverage["rapm"]["through_date"] = max(latest.values()).isoformat()
     for counts in coverage.values():
         counts["missing_games"] = counts["expected_games"] - counts["included_games"]
@@ -768,6 +786,8 @@ def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *, dry_run=Fa
                       f"{missing} missing", file=summary)
                 if missing:
                     print(f"::warning::{metric.upper()} coverage through {cutoff}: {missing} games missing")
+            print(f"\n- BPM positions: {listed_count} from rosters, "
+                  f"{len(bpm) - listed_count} using position 3", file=summary)
             if any(c["missing_games"] for c in coverage.values()):
                 print("\n| Game date | Game ID | Metric | Reason |\n|---|---|---|---|", file=summary)
                 for gid, played in sorted(dates.items(), key=lambda game: (game[1], game[0]), reverse=True):
@@ -779,7 +799,7 @@ def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *, dry_run=Fa
 
     if not dry_run:
         store.publish(dict(season=season, through_date=cutoff.isoformat(), published_at=stamp,
-                           model_version="bpm-college-v1+rapm-ridge-2000-v1",
+                           model_version=f"bpm-college-roster-v2+rapm-ridge-2000-decay-{RAPM_HALF_LIFE_DAYS}d-v2",
                            coverage=coverage, input_manifest=manifest), players)
 
 
@@ -845,7 +865,9 @@ def main():
         print(dict(count))
         games, statuses = (dry_games, dry_statuses) if args.dry_run else store.load_season(season, cutoff)
         teams = {r["id"]: r["team"] for r in feed_rows(inputs, "team_ids", season)}
-        fit_and_publish(season, cutoff, games, statuses, teams, stamp.isoformat(), dry_run=args.dry_run)
+        positions = listed_bpm_positions(feed_rows(inputs, "team_rosters", season), teams)
+        fit_and_publish(season, cutoff, games, statuses, teams, stamp.isoformat(),
+                        dry_run=args.dry_run, listed_positions=positions)
 
 
 if __name__ == "__main__":
