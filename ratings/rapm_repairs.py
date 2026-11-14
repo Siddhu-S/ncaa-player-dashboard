@@ -68,6 +68,7 @@ LATE_SUBSTITUTIONS = {
 }
 # Expected matchup and published score, followed by the school box-score result.
 SWAPPED_SCORES = {
+    "6613750": ("Coppin St.", "Bradley", (56, 54), (54, 56)),
     "6624357": ("App State", "Merrimack", (49, 63), (63, 49)),
     "6624363": ("UAB", "McNeese", (99, 78), (78, 99)),
 }

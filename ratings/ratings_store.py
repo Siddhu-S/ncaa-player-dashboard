@@ -100,6 +100,17 @@ def publish(snapshot, players):
         if exists (select 1 from ratings.snapshots where season={season}
                    and through_date='{cutoff}' and published_at>'{snapshot["published_at"]}')
         then raise exception 'A newer run already published this cutoff'; end if;
+        if exists (
+            select old.entry->>0, old.entry->>1
+            from (
+                select input_manifest from ratings.snapshots where season={season}
+                  and through_date<='{cutoff}' order by through_date desc limit 1
+            ) previous
+            cross join lateral jsonb_array_elements(previous.input_manifest) old(entry)
+            except
+            select proposed.entry->>0, proposed.entry->>1
+            from jsonb_array_elements({payload(snapshot["input_manifest"])}) proposed(entry)
+        ) then raise exception 'Ratings coverage regressed: a previously published game is missing'; end if;
         end $$;""",
         records("snapshots", [snapshot], """on conflict (season,through_date) do update set
           published_at=excluded.published_at, model_version=excluded.model_version,
