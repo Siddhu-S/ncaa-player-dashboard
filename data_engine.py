@@ -388,7 +388,8 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
     Called by both loaders after they've normalised column names.
     """
     df = df[df["name"].str.len() > 0].copy().reset_index(drop=True)
-    df["id"] = [id_prefix + str(i) for i in range(len(df))]
+    if "id" not in df:
+        df["id"] = [id_prefix + str(i) for i in range(len(df))]
 
     # ── Similarity setup ─────────────────────────────────────────
 
@@ -582,13 +583,14 @@ def load_d1_data(
     id_prefix: str = "d1p",
     transfer_path: str | None = None,
     recruiting_path: str | None = None,
+    snapshot_season: int | None = None,
 ) -> dict:
     """
     Load D-I dataset (mbb_with_pca.csv).
     Remaps column names and rescales percentages to match the shared schema
     expected by app.py helpers.
     """
-    raw = pd.read_csv(csv_path)
+    raw = pd.read_csv(csv_path, dtype={"pid": str})
 
     def n(col):
         return pd.to_numeric(raw.get(col, 0), errors="coerce").fillna(0)
@@ -601,8 +603,19 @@ def load_d1_data(
     # Identity
     df["name"]     = t("player_name")
     df["team"]     = t("team")
+    if snapshot_season is not None:
+        if not t("year").eq(str(snapshot_season)).all():
+            raise ValueError(f"Division I snapshot must contain only season {snapshot_season}")
+        player_ids = t("pid")
+        if not player_ids.str.fullmatch(r"\d+").all() or player_ids.duplicated().any():
+            raise ValueError("Division I snapshot requires unique Torvik player IDs")
+        df["id"] = id_prefix + "torvik-" + player_ids
     df["conf"]     = t("conf")
     df["confName"] = df["conf"].map(D1_CONF_NAMES).fillna(df["conf"])
+    if {"pbp_pid", "pbp_join_method", "pbp_join_warning"}.issubset(raw.columns):
+        pbp_id = pd.to_numeric(raw["pbp_pid"], errors="coerce")
+        verified_id = t("pbp_join_method").eq("pid") & t("pbp_join_warning").eq("")
+        df["torvik_player_id"] = pbp_id.where(verified_id).astype("Int64")
 
     # Position — map role to 5-category system
     df["pos"] = t("role").map(D1_ROLE_MAP).fillna("G")
@@ -636,6 +649,12 @@ def load_d1_data(
     df["ast_per_40"] = (df["apg"] * pace_to_40).fillna(0)
     df["stl_per_40"] = (df["spg"] * pace_to_40).fillna(0)
     df["blk_per_40"] = (df["bpg"] * pace_to_40).fillna(0)
+    total_minutes = df["gp"] * df["mpg"]
+    df["stops_per_40"] = np.where(
+        total_minutes > 0,
+        n("stops") * 40.0 / total_minutes.replace(0, np.nan),
+        np.nan,
+    )
 
     # Assist-to-turnover (raw tov col is TOV_per_24; use AST_TOV ratio directly)
     df["ast_tov"] = n("AST_TOV")
@@ -662,6 +681,7 @@ def load_d1_data(
 
     # Usage — 0-100 in D-I → /100 for consiwaistency with D-II (both end up ~0.19 mean)
     df["usg"] = n("usg") / 100.0
+    df["3P_per_100_team_pos"] = n("3P_per_100_team_pos")
 
     # 3P share — already 0-1
     df["three_share"] = n("three_share")
@@ -679,7 +699,10 @@ def load_d1_data(
     df["PC4"] = n("val_PC1")
 
     df["bpm"] = n("bpm")
+    df["obpm"] = n("obpm")
+    df["dbpm"] = n("dbpm")
     df["porpag"] = n("PORPAG")
+    df["adj_drtg"] = n("adj_drtg")
 
     # Low-sample flag for default D-I filtering and player detail warnings.
     df["low_sample_size"] = (df["mpg"] < 10) | (df["gp"] < 5)
@@ -689,6 +712,9 @@ def load_d1_data(
     df["mid_share"] = n("mid_share")
     df["rim_fg_pct"] = n("rim_pct")
     df["mid_fg_pct"] = n("mid_pct")
+    total_known_fga = n("total_known_fga").replace(0, np.nan)
+    df["dunk_share"] = (n("dunks_attempts") / total_known_fga).replace([np.inf, -np.inf], np.nan).fillna(0).clip(0, 1)
+    df["dunk_pct"] = n("dunk_pct").clip(0, 1)
 
     # PBP zone counts.
     df["pbp_rim_made"] = n("pbp_rim_made")
@@ -732,4 +758,10 @@ def load_d1_data(
     for col, values in _load_recruiting_tags(recruiting_path, raw).items():
         df[col] = values
 
-    return _build_output(df, id_prefix)
+    output = _build_output(df, id_prefix)
+    if snapshot_season is not None:
+        timestamps = t("snapshot_retrieved_at").unique()
+        if len(timestamps) != 1 or not timestamps[0]:
+            raise ValueError("Division I snapshot requires a single retrieval timestamp")
+        output["retrieved_at"] = pd.to_datetime(timestamps[0], utc=True)
+    return output

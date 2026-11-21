@@ -1,0 +1,110 @@
+date,home_team,away_team,espn_event_id,source,play_by_play_url,source_review,review_source_url,reconstructed,technical_points,non_five_player_seconds,actor_conflicts,source_max_minute_error,torvik_max_minute_error,minute_review,home_possessions,away_possessions,excluded_lineup_possessions,issue,used
+2026-11-03,UNLV,Northern Arizona,401924911,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924911,UNLV's official play-by-play credits the 1H 3:43 three to Max Majerle.,https://unlvrebels.com/sports/mens-basketball/stats/2026-27/northern-arizona/boxscore/17950,136,2,0,0,0.967,0.05,,69,67,0,,136
+2026-11-04,South Dakota,Northern Kentucky,401928811,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401928811,,,154,2,0,0,0.767,0.033,,77,77,0,,154
+2026-11-05,Texas Tech,Bethune Cookman,401921133,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921133,,,140,0,0,0,0.733,0.05,,70,70,0,,140
+2026-11-05,Quinnipiac,Bryant,401921680,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921680,,,127,0,0,0,0.9,0.05,,63,64,0,,127
+2026-11-05,Syracuse,Central Connecticut,401909717,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909717,,,136,0,0,1,1.0,0.05,,68,68,1,,135
+2026-11-05,Incarnate Word,Chicago St.,401919732,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401919732,,,151,1,0,0,0.7,0.05,,77,74,0,,151
+2026-11-05,Duke,Coastal Carolina,401909563,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909563,,,160,0,0,0,1.133,0.05,,81,79,0,,160
+2026-11-05,Lehigh,Cornell,401924718,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924718,,,141,0,0,0,1.0,0.5,,71,70,0,,141
+2026-11-05,Rice,East Texas A&M,401921094,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921094,,,138,0,0,0,0.917,0.05,,69,69,0,,138
+2026-11-05,Cincinnati,Green Bay,401921747,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921747,Green Bay and ESPN agree on the three scorer credits. Cincinnati and Torvik transfer one three from Collins to Colvin. The disputed candidates with both players on court have identical RAPM lineups and points.,https://greenbayphoenix.com/sports/mens-basketball/stats/2026-27/cincinnati/boxscore/10693,130,1,0,0,0.7,0.05,,64,66,1,,129
+2026-11-05,Princeton,Hofstra,401924733,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924733,,,125,0,0,0,0.833,0.05,,63,62,0,,125
+2026-11-05,Seton Hall,LIU,401919804,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401919804,,,139,0,0,0,0.783,0.05,,69,70,0,,139
+2026-11-05,Creighton,Le Moyne,401909491,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909491,,,145,0,0,1,0.467,0.067,,73,72,1,,144
+2026-11-05,Sacred Heart,Maine,401921682,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921682,,,144,0,0,0,0.9,0.033,,72,72,1,,143
+2026-11-05,Iona,NJIT,401920864,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920864,,,131,0,0,0,0.683,0.05,,65,66,0,,131
+2026-11-05,Illinois,Penn,401913526,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401913526,,,172,0,0,0,0.8,0.05,,86,86,0,,172
+2026-11-05,DePaul,South Florida,401909501,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909501,,,130,0,0,0,0.683,0.05,,66,64,0,,130
+2026-11-05,Marist,UMBC,401921084,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921084,,,152,4,0,0,0.533,0.05,,76,76,0,,152
+2026-11-05,Merrimack,UMass Lowell,401921679,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921679,,,130,0,0,0,0.583,0.05,,65,65,0,,130
+2026-11-05,Loyola Chicago,West Georgia,401911229,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911229,,,134,2,0,0,0.9,0.05,,66,68,0,,134
+2026-11-06,Oregon,Eastern Washington,401920717,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920717,,,148,0,0,0,0.833,0.05,,74,74,0,,148
+2026-11-06,Colorado St.,Idaho,401922261,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401922261,,,139,0,0,0,0.75,0.05,,69,70,0,,139
+2026-11-06,Kansas,Middle Tennessee,401909785,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909785,,,140,0,0,0,1.0,0.05,,71,69,0,,140
+2026-11-06,Rutgers,New Haven,401926135,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401926135,,,130,0,0,0,1.033,0.05,,66,64,0,,130
+2026-11-06,San Francisco,North Dakota St.,401921061,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921061,,,136,0,0,0,0.883,0.05,,68,68,0,,136
+2026-11-06,UCLA,North Florida,401922219,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401922219,,,160,0,0,0,0.883,0.05,,80,80,0,,160
+2026-11-06,Portland,UT Arlington,401929356,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401929356,,,156,0,0,0,0.917,0.05,,78,78,0,,156
+2026-11-06,Georgia,Presbyterian,401906780,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401906780,,,133,0,0,0,0.783,0.05,,65,68,0,,133
+2026-11-06,Illinois Chicago,Robert Morris,401928823,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401928823,,,137,0,0,0,1.083,0.05,,68,69,0,,137
+2026-11-06,USC Upstate,South Carolina St.,401922059,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401922059,,,152,0,0,0,1.45,0.05,,76,76,0,,152
+2026-11-06,UMKC,Southern Illinois,401920952,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920952,,,150,1,0,0,0.933,0.05,,74,76,0,,150
+2026-11-06,Iowa St.,Southern Miss,401909772,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909772,,,138,3,0,0,0.883,0.05,,69,69,0,,138
+2026-11-06,LSU,Texas Southern,401921809,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921809,The LSU game book identifies Ahmed Nedal Abdelrahman as #7. ESPN lists him as Ahmed Nedal #9.,https://static.lsusports.net/assets/docs/mb/27stats/ls02.pdf,151,0,0,0,2.233,0.05,,76,75,0,,151
+2026-11-06,Ohio St.,Youngstown St.,401916314,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401916314,,,145,1,0,0,0.9,0.05,,72,73,0,,145
+2026-11-07,Miami OH,Bellarmine,401911007,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911007,,,136,2,0,0,0.967,0.05,,67,69,0,,136
+2026-11-07,UC Riverside,Denver,401926227,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401926227,,,141,0,0,0,0.483,0.05,,70,71,0,,141
+2026-11-07,UC San Diego,Fresno St.,401920371,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920371,UC San Diego credits the 2H 8:39 three to Leo Beath and records the 2H 14:48 offensive rebound before substitutions.,https://ucsdtritons.com/boxscore.aspx?id=12384&path=mbball,133,0,0,0,0.7,0.05,,66,67,0,,133
+2026-11-07,Western Illinois,Houston Christian,401924951,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924951,The official log also records an 11-second gap between Houston Christian's exit and entry. The possession spanning it is excluded.,https://goleathernecks.com/boxscore.aspx?id=14882&path=mbball,143,0,11.0,0,0.467,0.05,,72,71,1,,142
+2026-11-07,La Salle,LIU,401919805,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401919805,,,150,0,0,0,0.467,0.05,,75,75,0,,150
+2026-11-07,Abilene Christian,Lamar,401917962,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401917962,,,152,0,0,0,0.7,0.05,,76,76,0,,152
+2026-11-07,Davidson,Mercer,401925772,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925772,,,134,0,0,0,0.933,0.05,,68,66,0,,134
+2026-11-07,Louisville,Morehead St.,401918948,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401918948,,,140,0,0,0,0.633,0.05,,70,70,0,,140
+2026-11-07,Niagara,Morgan St.,401924843,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924843,,,144,0,0,1,1.15,0.05,,72,72,1,,143
+2026-11-07,Utah St.,Nebraska Omaha,401929293,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401929293,,,144,0,0,0,0.767,0.05,,72,72,0,,144
+2026-11-07,New Mexico,Northern Arizona,401924895,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924895,,,131,0,0,0,1.0,0.05,,65,66,0,,131
+2026-11-07,Bucknell,Old Dominion,401924940,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924940,,,126,0,0,0,0.483,0.05,,63,63,0,,126
+2026-11-07,UT Rio Grande Valley,Prairie View A&M,401925106,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925106,,,132,0,0,0,1.217,0.05,,66,66,0,,132
+2026-11-07,Santa Clara,Sacramento St.,401917519,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401917519,,,168,0,0,0,0.8,0.05,,84,84,1,,167
+2026-11-07,UNLV,Samford,401924912,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924912,,,150,0,0,0,1.65,0.05,,75,75,0,,150
+2026-11-07,UC Irvine,San Jose St.,401911470,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911470,,,147,3,0,0,0.533,0.05,,73,74,0,,147
+2026-11-07,Memphis,VCU,401918986,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401918986,,,144,0,0,0,0.833,0.05,,71,73,0,,144
+2026-11-08,Houston,California,401918053,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401918053,,,140,0,0,0,0.5,0.05,,70,70,0,,140
+2026-11-08,Bryant,Fairfield,401921683,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921683,,,144,0,0,0,0.55,0.05,,73,71,0,,144
+2026-11-08,UTEP,Incarnate Word,401929352,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401929352,,,133,0,0,0,0.7,0.05,,66,67,0,,133
+2026-11-08,UMass Lowell,Marist,401921687,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921687,,,127,0,0,0,0.5,0.05,,63,64,0,,127
+2026-11-08,Albany,Merrimack,401921686,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921686,,,125,0,0,0,0.5,0.05,,63,62,0,,125
+2026-11-08,Siena,Princeton,401924734,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924734,,,151,0,0,0,0.683,0.05,,77,74,0,,151
+2026-11-08,Temple,Richmond,401911238,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911238,,,140,0,0,0,0.817,0.05,,70,70,1,,139
+2026-11-08,New Hampshire,Sacred Heart,401921685,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921685,,,160,1,0,0,0.633,0.05,,79,81,0,,160
+2026-11-08,Hawaii,UT Arlington,401929002,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401929002,"Hawai‘i's official box lists Kajus Mikalauskas, who is absent from the Torvik game box. He is included in the replay based on the substitutions.",https://hawaiiathletics.com/boxscore.aspx?id=31831&path=mbball,142,0,0,0,0.533,0.733,,71,71,0,,142
+2026-11-08,Tennessee Tech,Western Kentucky,401926215,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401926215,,,165,2,0,0,0.6,0.05,,82,83,0,,165
+2026-11-09,Auburn,Appalachian St.,401920799,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920799,,,120,2,0,0,0.917,0.05,,61,59,0,,120
+2026-11-09,Northwestern,Boston University,401920734,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920734,,,130,0,0,0,0.9,0.05,,65,65,0,,130
+2026-11-09,Charlotte,Seton Hall,401920887,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920887,,,134,0,0,0,0.467,0.067,,67,67,0,,134
+2026-11-09,Oregon St.,Eastern Washington,401920718,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920718,,,151,0,0,0,1.083,0.05,,76,75,0,,151
+2026-11-09,Penn,Howard,401921180,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921180,,,155,0,0,1,0.65,0.05,,77,78,1,,154
+2026-11-09,LSU,Louisiana Tech,401921810,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921810,,,143,2,0,0,0.483,0.05,,72,71,0,,143
+2026-11-09,Ohio St.,Marshall,401916315,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401916315,,,153,0,0,0,0.617,0.05,,78,75,0,,153
+2026-11-09,Washington,Mississippi Valley St.,401925737,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925737,,,129,0,0,0,0.483,0.05,,64,65,0,,129
+2026-11-09,Stanford,Rice,401921095,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921095,,,147,2,0,0,0.5,0.05,,73,74,0,,147
+2026-11-09,Chicago St.,South Carolina St.,401919733,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401919733,,,137,2,0,1,0.883,0.05,,69,68,1,,136
+2026-11-09,Jacksonville,UMKC,401920877,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920877,,,129,0,0,0,2.1,0.05,,66,63,0,,129
+2026-11-09,Illinois Chicago,UNC Greensboro,401926181,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401926181,,,128,0,0,0,0.783,0.05,,63,65,0,,128
+2026-11-09,Coastal Carolina,USC Upstate,401922060,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401922060,,,133,0,0,0,0.7,0.05,,67,66,0,,133
+2026-11-09,Hawaii,Portland,401929003,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401929003,Hawai‘i's game log records Nance's offensive-foul turnover before the substitutions at 10:21.,https://hawaiiathletics.com/boxscore.aspx?id=31833&path=mbball,133,1,0,0,0.417,0.05,,67,66,0,,133
+2026-11-10,Duke,Michigan St.,401909564,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909564,,,143,0,0,0,0.467,0.05,,73,70,0,,143
+2026-11-10,Georgia Tech,Eastern Kentucky,401920306,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920306,The official log records a Georgia Tech defensive rebound and steal at the same stoppage. Excluded the intervening Eastern Kentucky turnover observation because the control sequence is ambiguous.,https://ekusports.com/boxscore.aspx?id=9906&path=mbball,150,0,0,0,0.467,0.05,,73,77,1,,149
+2026-11-10,Middle Tennessee,Evansville,401927369,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401927369,,,141,0,0,0,0.9,0.05,,71,70,0,,141
+2026-11-10,Wisconsin,Fairfield,401920895,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920895,,,144,0,0,0,1.15,0.05,,72,72,0,,144
+2026-11-10,Texas Tech,Illinois,401913527,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401913527,,,148,0,0,0,1.283,0.05,,73,75,0,,148
+2026-11-10,Fordham,Iona,401911196,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911196,,,138,4,0,1,0.55,0.05,,69,69,1,,137
+2026-11-10,Villanova,La Salle,401921774,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921774,,,138,0,0,0,0.917,0.05,,69,69,0,,138
+2026-11-10,New Mexico,Little Rock,401924896,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924896,,,139,2,0,0,0.883,0.05,,68,71,0,,139
+2026-11-10,Troy,Loyola Marymount,401917520,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401917520,,,141,0,0,0,0.7,0.05,,71,70,0,,141
+2026-11-10,Boston College,Maryland Eastern Shore,401909553,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909553,,,121,0,0,0,0.483,0.05,,60,61,0,,121
+2026-11-10,Vanderbilt,Memphis,401918987,University of Memphis,https://gotigersgo.com/sports/mens-basketball/stats/2026-27/no-22-vanderbilt/boxscore/20278,,,143,0,0,0,0.55,0.05,,71,72,0,,143
+2026-11-10,San Francisco,Montana,401921062,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921062,,,132,0,0,0,0.617,0.05,,65,67,0,,132
+2026-11-10,Rutgers,NJIT,401920866,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920866,,,153,0,0,0,0.6,0.05,,76,77,0,,153
+2026-11-10,Saint Louis,Northern Kentucky,401911250,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911250,,,164,0,0,0,1.05,0.05,,81,83,0,,164
+2026-11-10,Colorado,San Diego,401909761,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909761,,,142,0,0,0,0.567,0.05,,70,72,0,,142
+2026-11-10,Iowa St.,Southern,401909773,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401909773,,,155,0,0,0,0.45,0.05,,77,78,0,,155
+2026-11-10,UT Rio Grande Valley,Texas St.,401925107,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925107,,,120,0,0,0,0.533,0.05,,60,60,0,,120
+2026-11-10,Duquesne,Washington St.,401925781,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925781,,,123,0,0,0,0.55,0.05,,61,62,0,,123
+2026-11-10,Kennesaw St.,Winthrop,401925708,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925708,,,165,0,0,0,0.55,0.05,,83,82,0,,165
+2026-11-10,Utah St.,Utah Tech,401925940,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925940,Utah State's game log records Brown's layup before the substitutions at 18:19 in the second half.,https://utahstateaggies.com/sports/mens-basketball/stats/2026-27/utah-tech/boxscore/16847,158,2,0,0,0.767,0.05,,80,78,0,,158
+2026-11-11,UCLA,Arkansas Pine Bluff,401930177,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401930177,,,145,0,0,0,1.15,0.05,,73,72,0,,145
+2026-11-11,St. Bonaventure,Cornell,401911263,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911263,,,143,0,0,0,1.217,0.05,,71,72,0,,143
+2026-11-11,East Texas A&M,Fairleigh Dickinson,401919759,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401919759,School play-by-play orders Jevtic's layup before the substitutions at 15:54 and Duchamp's entry after the foul at 7:01.,https://lionathletics.com/boxscore.aspx?id=11083&path=mbball,144,0,0,0,0.683,0.05,,73,71,1,,143
+2026-11-11,Florida A&M,UMKC,401921005,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921005,,,144,0,0,0,0.683,0.05,,72,72,1,,143
+2026-11-11,UC Davis,Incarnate Word,401911519,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401911519,,,148,3,0,0,0.583,0.05,,73,75,0,,148
+2026-11-11,Southern Miss,Jackson St.,401921037,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921037,,,161,0,0,0,0.95,0.05,,81,80,2,,159
+2026-11-11,Oregon,Mississippi Valley St.,401925738,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925738,,,132,0,0,0,0.45,0.05,,65,67,0,,132
+2026-11-11,VCU,NJIT,401920202,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920202,,,137,0,0,0,1.217,0.05,,68,69,0,,137
+2026-11-11,Sam Houston St.,Pepperdine,401928794,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401928794,,,140,0,0,3,0.883,0.05,,70,70,4,,136
+2026-11-11,Colorado St.,Portland St.,401925915,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401925915,,,144,0,0,0,1.3,0.05,,72,72,0,,144
+2026-11-11,Arkansas,Robert Morris,401928824,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401928824,,,130,0,0,0,0.583,0.05,,66,64,0,,130
+2026-11-11,North Texas,Santa Clara,401917522,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401917522,,,145,0,0,0,0.45,0.05,,72,73,0,,145
+2026-11-11,Abilene Christian,Stephen F. Austin,401917963,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401917963,,,129,0,0,0,1.183,0.05,,65,64,0,,129
+2026-11-11,West Georgia,UNC Asheville,401917901,ESPN,https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401917901,,,145,0,0,0,0.767,0.05,,73,72,0,,145
