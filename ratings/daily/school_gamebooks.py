@@ -6,13 +6,13 @@ from datetime import datetime
 from functools import lru_cache
 from html import unescape
 from html.parser import HTMLParser
-from itertools import pairwise
 import re
 from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from player_ratings import ROOT, key, unique
-from rebuild_espn_rapm import replay, sidearm_game, sidearm_minutes, sidearm_payload
+from rebuild_espn_rapm import (espn_game, replay, short_stint_minutes, sidearm_game,
+                              sidearm_minutes, sidearm_payload)
 
 STAT_FIELDS = {
     "two_made": "totalFieldGoalsMade", "two_attempts": "totalFieldGoalsAttempted",
@@ -29,6 +29,14 @@ SCHOOL_REPLAY_MINUTES = {
         "https://barttorvik.com/2027_all_advgames.json.gz",
         "https://www.espn.com/mens-college-basketball/boxscore/_/gameId/401924721",
     )),
+}
+
+
+# Dayton's final report credits Haynes with a turnover between the two
+# logged swaps. The earlier swap also reproduces the official box minutes.
+# https://daytonflyers.com/documents/2026/11/22/2924476.PDF
+SCHOOL_DUPLICATE_SWAPS = {
+    "401920736": (2, 395, 327, {("out", "RANDALL,GRANT"), ("in", "HAYNES,JALEN")}),
 }
 
 
@@ -252,7 +260,7 @@ def school_gamebook(book, game, teams, player_ids, jersey_ids, roster, aliases):
     if any(int(scores[side]) != scheduled[team] for side, team in clubs.items()):
         raise ValueError("School game book does not match the independent final score")
 
-    box, mapped = [], {}
+    box, mapped, short_stints = [], {}, {}
     for side, group in (("home", "homeTeam"), ("away", "visitingTeam")):
         team = clubs[side]
         for row in book[group]["players"]:
@@ -276,11 +284,37 @@ def school_gamebook(book, game, teams, player_ids, jersey_ids, roster, aliases):
             stats["two_made"] -= stats["threes"]
             stats["two_attempts"] -= stats["three_attempts"]
             mins = sidearm_minutes(row["stats"])
+            if mins == 0 and any(stats.values()) and not int(row["gameStarted"]):
+                short_stints[len(box)] = team, check
             box.append((team, roster[team, player], player, mins, stats))
+    if short_stints:
+        _, _, plays = sidearm_game(book, clubs)
+        for index, (team, check) in short_stints.items():
+            label, name, player, _, stats = box[index]
+            box[index] = label, name, player, short_stint_minutes(plays, team, check), stats
     return box, mapped, clubs, scheduled
 
 
-def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event=""):
+def corroborated_team_baskets(book, clubs, summary, event):
+    if not summary:
+        return ()
+    try:
+        _, _, school_plays = sidearm_game(book, clubs)
+        if not any(play.kind == "team_basket" for play in school_plays):
+            return ()
+        espn_clubs, _, _, espn_plays = espn_game(summary, event)
+    except (KeyError, TypeError, ValueError):
+        return ()
+    identifiers = {team: clubs[side] for side, team in espn_clubs.items()}
+    recorded = Counter((p.period, p.clock, identifiers[p.team], p.points)
+                       for p in espn_plays if p.kind == "team_basket" and p.team in identifiers)
+    official = Counter((p.period, p.clock, p.team, p.points)
+                       for p in school_plays if p.kind == "team_basket")
+    return tuple((recorded & official).elements())
+
+
+def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event="",
+                       team_baskets=(), espn_minutes=None):
     def actor_key(name):
         last, _, first = name.rpartition(",")
         return key(f"{first} {last}" if last else first)
@@ -302,18 +336,14 @@ def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event=
     periods = [int(period["number"]) for period in book["periodsWithPlays"] if period["plays"]]
     if school_final != final or len(periods) < 2 or periods != list(range(1, len(periods) + 1)):
         raise ValueError("School play-by-play is missing or has the wrong final score")
-    # Scorekeepers can record a player checking in and immediately back out at
-    # the same dead ball. An adjacent pair for a non-participant changes no lineup.
-    appearances = Counter((play.team, play.player) for play in plays if play.player)
-    zero_stints = set()
-    for index, (entry, exit) in enumerate(pairwise(plays)):
-        actor = (entry.team, entry.player)
-        if (entry.player and entry.kind == "in" and exit.kind == "out"
-                and actor not in players and appearances[actor] == 2
-                and (entry.period, entry.clock, *actor) == (exit.period, exit.clock, exit.team, exit.player)):
-            zero_stints.update((index, index + 1))
-    plays = [play for index, play in enumerate(plays) if index not in zero_stints]
-    observations, minutes, bad_seconds, _, _ = replay(plays, players, final)
+    if swap := SCHOOL_DUPLICATE_SWAPS.get(event):
+        period, first, repeated, actors = swap
+        away = clubs["away"]
+        earlier = {(p.kind, p.player) for p in plays if (p.period, p.clock, p.team) == (period, first, away)}
+        if actors <= earlier:
+            plays = [p for p in plays if (p.period, p.clock, p.team) != (period, repeated, away)
+                     or (p.kind, p.player) not in actors]
+    observations, minutes, bad_seconds, _, _ = replay(plays, players, final, team_baskets=team_baskets)
     if bad_seconds:
         raise ValueError("School play-by-play does not reproduce box-score playing times")
     minute_review = []
@@ -323,6 +353,12 @@ def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event=
             continue
         team, player = mapped[actor]
         verified = SCHOOL_REPLAY_MINUTES.get((event, team, player))
+        espn_time = (espn_minutes or {}).get((team, player, row[4]))
+        if espn_time is not None and abs(played - espn_time) <= 5 / 60:
+            minute_review.append(dict(player_id=player, school_minutes=row[3],
+                                      replay_minutes=round(played, 3), espn_replay_minutes=round(espn_time, 3),
+                                      source_urls=[f"https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/{event}"]))
+            continue
         if verified is None or row[3] != verified[0] or abs(played - verified[1]) > 0.05:
             raise ValueError("School play-by-play does not reproduce box-score playing times")
         minute_review.append(dict(player_id=player, school_minutes=row[3], replay_minutes=round(played, 3),

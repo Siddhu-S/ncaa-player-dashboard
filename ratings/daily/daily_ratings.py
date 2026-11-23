@@ -21,13 +21,13 @@ from player_ratings import (FEEDS, RAPM_HALF_LIFE_DAYS, RELEASES, ROOT, download
 from rapm_repairs import MISSING_ROSTER_PLAYERS, expected_score
 from rebuild_espn_rapm import ESPN_NAME_VARIANTS, ESPN_ROSTER_JERSEYS, espn_game, replay
 import ratings_store as store
-from school_gamebooks import (candidate_urls, fetch_html, gamebook_urls, parse_gamebook,
+from school_gamebooks import (candidate_urls, corroborated_team_baskets, fetch_html, gamebook_urls, parse_gamebook,
                               schedule_gamebooks, school_aliases, school_gamebook,
                               school_possessions, school_schedules)
 
 # Increment INPUT_RULES_VERSION when validation, source selection or curated
 # corrections change. The next successful run revalidates stored games.
-INPUT_RULES_VERSION = 10
+INPUT_RULES_VERSION = 11
 INPUT_MODEL_VERSION = (f"bpm-college-roster-v2+rapm-ridge-2000-decay-{RAPM_HALF_LIFE_DAYS}d-v2"
                        f"+inputs-v{INPUT_RULES_VERSION}")
 MODEL_VERSION = INPUT_MODEL_VERSION + "+epm-bpm-prior-v1"
@@ -299,7 +299,7 @@ def espn_box(game, summary, teams, aliases, player_ids, jersey_ids, reviewed_ids
     return result
 
 
-def valid_box(rows, game, teams):
+def valid_box(rows, game, teams, *, team_baskets=()):
     for side in ("home", "away"):
         box = [r for r in rows if r[47] == teams[game[f"{side}_team_id"]]]
         if not box:
@@ -310,7 +310,8 @@ def valid_box(rows, game, teams):
         # The official game includes an own basket with no individual scorer.
         if game["game_date"] == "2026-11-02" and box[0][47] == "Colgate" and (points, expected) == (74, 76):
             continue
-        if points != expected:
+        credited_to_team = sum(value for _, _, team, value in team_baskets if team == game[f"{side}_team_id"])
+        if points + credited_to_team != expected:
             raise ValueError(f"{side} player points {points} differ from final {expected}")
     return sorted(rows, key=lambda r: (r[47], str(r[51])))
 
@@ -458,7 +459,7 @@ def majority_box(ncaa_rows, espn_rows, school_values):
     return resolved, votes
 
 
-def replay_minutes(summary, event):
+def replay_minutes(summary, event, *, corroboration_only=False):
     _, final, players, plays = espn_game(summary, event)
     competitors = summary["header"]["competitions"][0]["competitors"]
     periods = {len(team.get("linescores", [])) for team in competitors}
@@ -468,8 +469,11 @@ def replay_minutes(summary, event):
     if {p.period for p in plays} != expected or {p.period for p in plays if p.kind == "end" and p.clock == 0} != expected:
         raise ValueError("Play-by-play does not cover every period")
     _, minutes, bad_seconds, actor_errors, _ = replay(plays, players, final)
-    if bad_seconds or actor_errors:
+    if bad_seconds or (actor_errors and not corroboration_only):
         raise ValueError("Substitutions do not establish playing time throughout the game")
+    if corroboration_only:
+        disputed = {(team, player) for _, _, team, _, player in actor_errors}
+        return {actor: value for actor, value in minutes.items() if actor not in disputed}
     return minutes
 
 
@@ -733,6 +737,18 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp, *, source_r
                 errors["ncaa"] = str(error)
         school_lineups = None
         school_url = None
+        espn_stint_minutes = {}
+        if summary and gid not in observations:
+            try:
+                replayed = replay_minutes(summary, event, corroboration_only=True)
+                replayed_rows = espn_box(game, summary, teams, aliases, player_ids, jersey_ids,
+                                         reviewed_ids, replayed, school_rows=verified_rows)
+                espn_stint_minutes = {
+                    (team_ids_by_name[row[47]], row[51].removeprefix("ncaa:"), row[33]): row[8]
+                    for row in replayed_rows if row[8] > 0
+                }
+            except (KeyError, TypeError, ValueError):
+                pass
         if gid not in observations or not candidates:
             for url in candidate_urls(game, teams, school_urls.get(event, ()), schedules):
                 evidence.setdefault("school_gamebook_urls", []).append(url)
@@ -746,9 +762,13 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp, *, source_r
                     book = parse_gamebook(html, neutral)
                     school_rows, mapped, clubs, final = school_gamebook(
                         book, game, teams, player_ids, jersey_ids, roster, school_player_ids)
+                    team_baskets = corroborated_team_baskets(book, clubs, summary, event)
                     school_box_rows = valid_box(
                         [box_row(game, team, name, f"ncaa:{player}", minutes, stats, book["isNeutral"], teams)
-                         for team, name, player, minutes, stats in school_rows], game, teams)
+                         for team, name, player, minutes, stats in school_rows], game, teams,
+                        team_baskets=team_baskets)
+                    if team_baskets:
+                        evidence["corroborated_team_baskets"] = team_baskets
                 except (OSError, KeyError, TypeError, ValueError) as error:
                     errors["official_school_gamebook"] = str(error)
                     continue
@@ -757,7 +777,8 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp, *, source_r
                 if gid not in observations:
                     try:
                         school_lineups = school_possessions(book, mapped, clubs, final, roster, player_ids,
-                                                           event=event or "")
+                                                           event=event or "", team_baskets=team_baskets,
+                                                           espn_minutes=espn_stint_minutes)
                     except (KeyError, TypeError, ValueError) as error:
                         evidence["school_play_by_play_error"] = str(error)
                 school_url = url
@@ -989,8 +1010,11 @@ def fit_and_publish(season, cutoff, games, statuses, teams, stamp, *,
                 latest[player] = max(latest.get(player, date.min), played)
     if not boxes or not groups:
         raise ValueError("Both metrics need accepted game inputs before publishing")
+    official_scores = {game["game_key"]: {
+        teams[game[f"{side}_team_id"]]: game[f"{side}_score"] for side in ("home", "away")
+    } for game in games}
     bpm, bpm_through = season_bpm(boxes, season, cutoff, include_box_id=True,
-                                  listed_positions=listed_positions)
+                                  listed_positions=listed_positions, official_scores=official_scores)
     rated_before_review = len(bpm)
     bpm = {key: row for key, row in bpm.items() if (row["team"], row["box_player_id"]) not in minutes_disputes}
     withheld = rated_before_review - len(bpm)

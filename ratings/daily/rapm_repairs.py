@@ -16,8 +16,12 @@ LINEUP_NAMES = {
     ("627353", "NICK.BYRD"): "11588991",
     ("627394", "CHRIS.JONES"): "11471945",
 }
-# Stable Torvik IDs identify players missing from the NCAA roster asset.
+# Stable provider IDs identify players missing from the NCAA roster asset.
 MISSING_ROSTER_PLAYERS = {
+    # https://cornellbigred.com/sports/mens-basketball/roster/2026-27
+    ("627480", "TREY.WILLIAMS"): ("espn:5460041", "Trey Williams"),
+    # https://gofrogs.com/sports/mens-basketball/roster/robbie-avila/19316
+    ("627320", "ROBBIE.AVILA"): ("espn:4917097", "Robbie Avila"),
     ("627258", "MACALEAB.RICH"): ("bt:79258", "Macaleab Rich"),
     ("627498", "PHOENIX.WOODSON"): ("bt:145645", "Phoenix Woodson"),
     # The Oregon State game book confirms Sutton and Anglo are distinct players.
