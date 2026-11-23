@@ -122,9 +122,16 @@ NCAA player IDs. School play-by-play must also reconcile individual scoring,
 playing time and possession counts before it can enter RAPM.
 
 Game-book URLs can be supplied by ESPN event ID in
-`school_gamebooks_<season>.csv`. For schools in `school_gamebook_sites.csv`,
-the job also looks for a matching box-score link on the official schedule.
-The reader accepts structured and classic SIDEARM game books. An audited
+`school_gamebooks_<season>.csv`. The job also looks on both teams' official
+men's basketball schedules when a box score or lineup cannot be validated.
+`school_gamebook_sites.csv` covers the 365 teams in the 2026–27 input feed.
+Its source column records the NCAA profile or current official URL used to
+verify each site. Update the registry when a program changes sites or joins
+Division I. Season-specific URL paths are expanded for the requested season.
+Lookup uses schedule dates when available and opponent slugs as a fallback.
+The reader accepts structured and classic SIDEARM game books. Games whose
+school sites publish another format can still use either team's supported
+game book or an accepted provider revision. An audited
 school name variant can be recorded in `school_player_aliases_<season>.csv`
 with its roster ID, jersey and source. The variant is used while the current
 NCAA roster confirms the team, ID and jersey.

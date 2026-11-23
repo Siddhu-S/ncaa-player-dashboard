@@ -1,9 +1,11 @@
 """Read and validate official school game books for the daily Ratings job."""
 import csv
+from calendar import month_abbr
 from collections import Counter, defaultdict
 from datetime import datetime
 from functools import lru_cache
 from html import unescape
+from html.parser import HTMLParser
 from itertools import pairwise
 import re
 from urllib.parse import urljoin, urlsplit
@@ -122,9 +124,13 @@ def fetch_html(url):
     return html.decode("utf-8")
 
 
-def school_schedules():
+def school_schedules(season):
     with (ROOT / "school_gamebook_sites.csv").open(newline="", encoding="utf-8") as source:
-        return {row["team"]: row["schedule"] for row in csv.DictReader(source)}
+        return {
+            row["team"]: row["schedule"].format(season=f"{season - 1}-{season % 100:02}",
+                                                 start_year=season - 1)
+            for row in csv.DictReader(source)
+        }
 
 
 def school_aliases(season, roster_rows):
@@ -141,27 +147,95 @@ def school_aliases(season, roster_rows):
         return aliases
 
 
-@lru_cache
+MONTH_NUMBER = {month.casefold(): number for number, month in enumerate(month_abbr) if month}
+SCHEDULE_DATE = re.compile(
+    r"\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|"
+    r"Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})\b",
+    re.I,
+)
+BOX_SCORE_PATH = re.compile(r"/(?:box[-_]?scores?)(?:/|\.aspx$|$)", re.I)
+
+
+def month_day(label):
+    found = SCHEDULE_DATE.search(label)
+    if found:
+        return MONTH_NUMBER[found[1][:3].casefold()], int(found[2])
+    return None
+
+
+class ScheduleLinks(HTMLParser):
+    """Read Sidearm, WMT and Presto box-score links from official schedules."""
+
+    def __init__(self, schedule):
+        super().__init__()
+        self.schedule = schedule
+        self.host = urlsplit(schedule).netloc.casefold().removeprefix("www.")
+        self.links = {}
+        self.reading_date = False
+        self.event_date = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = (attrs.get("class") or "").split()
+        if "schedule-event-item" in classes or "sidearm-schedule-game" in classes:
+            self.event_date = None
+        if tag == "time" and "schedule-event-date__month-day" in classes:
+            self.reading_date = True
+        if tag != "a" or not attrs.get("href"):
+            return
+        url = urljoin(self.schedule, attrs["href"]).split("#", 1)[0]
+        link = urlsplit(url)
+        if (link.scheme not in {"http", "https"}
+                or link.netloc.casefold().removeprefix("www.") != self.host
+                or not BOX_SCORE_PATH.search(link.path)
+                or link.path.lower().endswith(".pdf")):
+            return
+        label = attrs.get("aria-label") or attrs.get("title") or ""
+        played = month_day(label) or self.event_date
+        if not played:
+            encoded = re.search(r"/(20\d{2})(\d{2})(\d{2})(?:_|\.)", link.path)
+            if encoded:
+                played = int(encoded[2]), int(encoded[3])
+        if played or url not in self.links:
+            self.links[url] = played
+
+    def handle_data(self, data):
+        if self.reading_date:
+            self.event_date = month_day(data) or self.event_date
+
+    def handle_endtag(self, tag):
+        if tag == "time":
+            self.reading_date = False
+
+
+@lru_cache(maxsize=512)
 def schedule_gamebooks(schedule):
     try:
         html = fetch_html(schedule)
+        parser = ScheduleLinks(schedule)
+        parser.feed(html)
     except (OSError, ValueError):
         return ()
-    return tuple(dict.fromkeys(
-        urljoin(schedule, unescape(path))
-        for path in re.findall(r'''href=["'](/sports/[^"']+/stats/[^"']+/boxscore/\d+)["']''', html)
-    ))
+    return tuple(parser.links.items())
 
 
 def candidate_urls(game, teams, exact_urls, schedules):
+    seen = set(exact_urls)
     yield from exact_urls
+    played = datetime.fromisoformat(game["game_date"])
     for side, other in (("home", "away"), ("away", "home")):
         schedule = schedules.get(teams[game[f"{side}_team_id"]])
         if not schedule:
             continue
         opponent = key(teams[game[f"{other}_team_id"]])
-        for url in reversed(schedule_gamebooks(schedule)):
-            if url not in exact_urls and key(urlsplit(url).path.split("/")[-3]) == opponent:
+        date_key = played.month, played.day
+        links = sorted(reversed(schedule_gamebooks(schedule)),
+                       key=lambda entry: entry[1] == date_key, reverse=True)
+        for url, day in links:
+            pieces = urlsplit(url).path.rstrip("/").split("/")
+            opponent_slug = pieces[-3] if len(pieces) >= 4 and pieces[-2] == "boxscore" else ""
+            if url not in seen and (day == date_key or key(opponent_slug) == opponent):
+                seen.add(url)
                 yield url
 
 

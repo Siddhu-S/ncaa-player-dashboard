@@ -1,34 +1,366 @@
-team,schedule
-Boston College,https://bceagles.com/sports/mens-basketball/schedule
-Brown,https://brownbears.com/sports/mens-basketball/schedule
-Cal St. Fullerton,https://fullertontitans.com/sports/mens-basketball/schedule
-Chattanooga,https://gomocs.com/sports/mens-basketball/schedule
-Elon,https://elonphoenix.com/sports/mens-basketball/schedule
-FGCU,https://fgcuathletics.com/sports/mens-basketball/schedule
-Gardner-Webb,https://gwusports.com/sports/mens-basketball/schedule
-Georgetown,https://guhoyas.com/sports/mens-basketball/schedule
-Harvard,https://gocrimson.com/sports/mens-basketball/schedule
-Idaho,https://govandals.com/sports/mens-basketball/schedule
-James Madison,https://jmusports.com/sports/mens-basketball/schedule
-LSU New Orleans,https://privateersports.com/sports/mens-basketball/schedule
-Longwood,https://longwoodlancers.com/sports/mens-basketball/schedule
-Marquette,https://gomarquette.com/sports/mens-basketball/schedule
-Morgan St.,https://morganstatebears.com/sports/mens-basketball/schedule
-New Hampshire,https://unhwildcats.com/sports/mens-basketball/schedule
-North Dakota St.,https://gobison.com/sports/mens-basketball/schedule
-Northern Colo.,https://uncbears.com/sports/mens-basketball/schedule
-Oakland,https://goldengrizzlies.com/sports/mens-basketball/schedule
-Oklahoma,https://soonersports.com/sports/mens-basketball/schedule
-Purdue Fort Wayne,https://gomastodons.com/sports/mens-basketball/schedule
-San Diego,https://usdtoreros.com/sports/mens-basketball/schedule
-San Francisco,https://usfdons.com/sports/mens-basketball/schedule
-South Dakota,https://goyotes.com/sports/mens-basketball/schedule
-St. John's (NY),https://redstormsports.com/sports/mens-basketball/schedule
-Syracuse,https://cuse.com/sports/mens-basketball/schedule
-Texas Southern,https://tsusports.com/sports/mens-basketball/schedule
-UConn,https://uconnhuskies.com/sports/mens-basketball/schedule
-UIW,https://uiwcardinals.com/sports/mens-basketball/schedule
-UNC Asheville,https://uncabulldogs.com/sports/mens-basketball/schedule
-Vermont,https://uvmathletics.com/sports/mens-basketball/schedule
-West Virginia,https://wvusports.com/sports/mens-basketball/schedule
-Youngstown St.,https://ysusports.com/sports/mens-basketball/schedule
+team,schedule,source
+A&M-Corpus Christi,https://goislanders.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/am-corpus-chris
+Abilene Christian,https://acusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/abilene-christian
+Air Force,https://goairforcefalcons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/air-force
+Akron,https://gozips.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/akron
+Alabama,https://rolltide.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/alabama
+Alabama A&M,https://aamusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/alabama-am
+Alabama St.,https://bamastatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/alabama-st
+Alcorn,https://alcornsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/alcorn
+American,https://aueagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/american
+App State,https://appstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/appalachian-st
+Arizona,https://arizonawildcats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/arizona
+Arizona St.,https://thesundevils.com/sports/mens-basketball/schedule,https://thesundevils.com/sports/mens-basketball/schedule
+Ark.-Pine Bluff,https://uapblionsroar.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ark-pine-bluff
+Arkansas,https://arkansasrazorbacks.com/sport/m-baskbl/schedule/,https://arkansasrazorbacks.com/sport/m-baskbl/schedule/
+Arkansas St.,https://astateredwolves.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/arkansas-st
+Army West Point,https://goarmywestpoint.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/army
+Auburn,https://auburntigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/auburn
+Austin Peay,https://letsgopeay.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/austin-peay
+Ball St.,https://ballstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ball-st
+Baylor,https://baylorbears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/baylor
+Bellarmine,https://athletics.bellarmine.edu/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bellarmine
+Belmont,https://belmontbruins.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/belmont
+Bethune-Cookman,https://bcuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bethune-cookman
+Binghamton,https://binghamtonbearcats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/binghamton
+Boise St.,https://broncosports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/boise-st
+Boston College,https://bceagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/boston-college
+Boston U.,https://goterriers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/boston-u
+Bowling Green,https://bgsufalcons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bowling-green
+Bradley,https://bradleybraves.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bradley
+Brown,https://brownbears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/brown
+Bryant,https://bryantbulldogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bryant
+Bucknell,https://bucknellbison.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bucknell
+Buffalo,https://ubbulls.com/sports/mens-basketball/schedule,https://ubbulls.com/sports/mens-basketball/schedule
+Butler,https://butlersports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/butler
+BYU,https://BYUcougars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/byu
+Cal Poly,https://gopoly.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/cal-poly
+Cal St. Fullerton,https://fullertontitans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/cal-st-fullerton
+California,https://calbears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/california
+California Baptist,https://cbulancers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/california-baptist
+Campbell,https://gocamels.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/campbell
+Canisius,https://gogriffs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/canisius
+Central Ark.,https://ucasports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/central-ark
+Central Conn. St.,https://ccsubluedevils.com/sports/mbkb/{season}/schedule,https://ccsubluedevils.com/sports/mbkb/2026-27/schedule
+Central Mich.,https://cmuchippewas.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/central-mich
+Charleston So.,https://csusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/charleston-so
+Charlotte,https://charlotte49ers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/charlotte
+Chattanooga,https://gomocs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/chattanooga
+Chicago St.,https://www.gocsucougars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/chicago-st
+Cincinnati,https://gobearcats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/cincinnati
+Clemson,https://clemsontigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/clemson
+Cleveland St.,https://csuvikings.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/cleveland-st
+Coastal Carolina,https://goccusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/coastal-caro
+Col. of Charleston,https://cofcsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/col-of-charleston
+Colgate,https://colgateathletics.com/sports/mens-basketball/schedule,https://colgateathletics.com/sports/mens-basketball/schedule
+Colorado,https://cubuffs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/colorado
+Colorado St.,https://csurams.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/colorado-st
+Columbia,https://gocolumbialions.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/columbia
+Coppin St.,https://coppinstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/coppin-st
+Cornell,https://cornellbigred.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/cornell
+Creighton,https://gocreighton.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/creighton
+CSU Bakersfield,https://gorunners.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/bakersfield
+CSUN,https://gomatadors.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/cal-st-northridge
+Dartmouth,https://dartmouthsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/dartmouth
+Davidson,https://davidsonwildcats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/davidson
+Dayton,https://daytonflyers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/dayton
+Delaware,https://bluehens.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/delaware
+Delaware St.,https://dsuhornets.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/delaware-st
+Denver,https://denverpioneers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/denver
+DePaul,https://depaulbluedemons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/depaul
+Detroit Mercy,https://detroittitans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/detroit
+Drake,https://godrakebulldogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/drake
+Drexel,https://drexeldragons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/drexel
+Duke,https://goduke.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/duke
+Duquesne,https://goduquesne.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/duquesne
+East Carolina,https://ecupirates.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/east-carolina
+East Texas A&M,https://lionathletics.com/sports/mens-basketball/schedule,https://lionathletics.com/sports/mens-basketball/schedule
+Eastern Ill.,https://eiupanthers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/eastern-ill
+Eastern Ky.,https://ekusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/eastern-ky
+Eastern Mich.,https://emueagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/eastern-mich
+Eastern Wash.,https://goeags.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/eastern-wash
+Elon,https://elonphoenix.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/elon
+ETSU,https://etsubucs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/east-tenn-st
+Evansville,https://gopurpleaces.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/evansville
+Fairfield,https://fairfieldstags.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fairfield
+FDU,https://fduknights.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fdu
+FGCU,https://fgcuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fgcu
+FIU,https://fiusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fiu
+Fla. Atlantic,https://fausports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fla-atlantic
+Florida,https://floridagators.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/florida
+Florida A&M,https://famuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/florida-am
+Florida St.,https://seminoles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/florida-st
+Fordham,https://fordhamsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fordham
+Fresno St.,https://gobulldogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/fresno-st
+Furman,https://furmanpaladins.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/furman
+Ga. Southern,https://gseagles.com/sports/mbball/schedule,https://gseagles.com/sports/mbball/schedule
+Gardner-Webb,https://gwusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/gardner-webb
+George Mason,https://gomason.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/george-mason
+George Washington,https://gwsports.com/sports/mbball/schedule,https://gwsports.com/sports/mbball/schedule
+Georgetown,https://guhoyas.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/georgetown
+Georgia,https://georgiadogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/georgia
+Georgia St.,https://georgiastatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/georgia-st
+Georgia Tech,https://ramblinwreck.com/sports/m-baskbl/schedule/,https://www.ncaa.com/schools/georgia-tech
+Gonzaga,https://gozags.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/gonzaga
+Grambling,https://gsutigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/grambling
+Grand Canyon,https://gculopes.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/grand-canyon
+Green Bay,https://greenbayphoenix.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/green-bay
+Hampton,https://hamptonpirates.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/hampton
+Harvard,https://gocrimson.com/sports/mens-basketball/schedule/{season},https://gocrimson.com/sports/mens-basketball/schedule/2026-27
+Hawaii,https://hawaiiathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/hawaii
+High Point,https://highpointpanthers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/high-point
+Hofstra,https://gohofstra.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/hofstra
+Holy Cross,https://goholycross.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/holy-cross
+Houston,https://uhcougars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/houston
+Houston Christian,https://hcuhuskies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/houston-christian
+Howard,https://hubison.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/howard
+Idaho,https://govandals.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/idaho
+Idaho St.,https://isubengals.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/idaho-st
+Illinois,https://fightingillini.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/illinois
+Illinois St.,https://goredbirds.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/illinois-st
+Indiana,https://iuhoosiers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/indiana
+Indiana St.,https://gosycamores.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/indiana-st
+Iona,https://ionagaels.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/iona
+Iowa,https://hawkeyesports.com/sports/mbball/schedule,https://hawkeyesports.com/sports/mbball/schedule
+Iowa St.,https://cyclones.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/iowa-st
+IU Indy,https://iuindyjags.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/iu-indy
+Jackson St.,https://gojsutigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/jackson-st
+Jacksonville,https://judolphins.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/jacksonville
+Jacksonville St.,https://jaxstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/jacksonville-st
+James Madison,https://jmusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/james-madison
+Kansas,https://kuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/kansas
+Kansas City,https://kcroos.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/umkc
+Kansas St.,https://www.kstatesports.com:443/sports/mens-basketball/schedule,https://www.ncaa.com/schools/kansas-st
+Kennesaw St.,https://ksuowls.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/kennesaw-st
+Kent St.,https://kentstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/kent-st
+Kentucky,https://ukathletics.com/sports/mbball/schedule/,https://www.ncaa.com/schools/kentucky
+La Salle,https://goexplorers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/la-salle
+Lafayette,https://goleopards.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/lafayette
+Lamar University,https://lamarcardinals.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/lamar
+Le Moyne,https://lemoynedolphins.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/le-moyne
+Lehigh,https://lehighsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/lehigh
+Liberty,https://libertyflames.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/liberty
+Lindenwood,https://lindenwoodlions.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/lindenwood-mo
+Lipscomb,https://lipscombsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/lipscomb
+Little Rock,https://LRTrojans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ualr
+LIU,https://www.liuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/long-island
+LMU (CA),https://lmulions.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/loyola-marymount
+Long Beach St.,https://longbeachstate.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/long-beach-st
+Longwood,https://longwoodlancers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/longwood
+Louisiana,https://ragincajuns.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/la-lafayette
+Louisiana Tech,https://latechsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/louisiana-tech
+Louisville,https://gocards.com/sports/mens-basketball/schedule?path=mbball,https://gocards.com/sports/mens-basketball/schedule?path=mbball
+Loyola Chicago,https://loyolaramblers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/loyola-chicago
+Loyola Maryland,https://loyolagreyhounds.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/loyola-maryland
+LSU,https://lsusports.net/sports/mens-basketball/schedule,https://www.ncaa.com/schools/lsu
+LSU New Orleans,https://privateersports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/new-orleans
+Maine,https://goblackbears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/maine
+Manhattan,https://gojaspers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/manhattan
+Marist,https://goredfoxes.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/marist
+Marquette,https://gomarquette.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/marquette
+Marshall,https://herdzone.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/marshall
+Maryland,https://umterps.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/maryland
+Massachusetts,https://umassathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/massachusetts
+McNeese,https://mcneesesports.com/sports/mens-basketball/schedule,https://mcneesesports.com/sports/mens-basketball/schedule
+Memphis,https://gotigersgo.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/memphis
+Mercer,https://mercerbears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/mercer
+Mercyhurst,https://hurstathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/mercyhurst
+Merrimack,https://merrimackathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/merrimack
+Miami (FL),https://miamihurricanes.com/sports/mbball/schedule/,https://www.ncaa.com/schools/miami-fl
+Miami (OH),https://miamiredhawks.com/sports/mens-basketball/schedule,https://miamiredhawks.com/sports/mens-basketball/schedule
+Michigan,https://mgoblue.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/michigan
+Michigan St.,https://msuspartans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/michigan-st
+Middle Tenn.,https://goblueraiders.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/middle-tenn
+Milwaukee,https://mkepanthers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/milwaukee
+Minnesota,https://gophersports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/minnesota
+Mississippi St.,https://hailstate.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/mississippi-st
+Mississippi Val.,https://mvsusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/mississippi-val
+Missouri,https://mutigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/missouri
+Missouri St.,https://missouristatebears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/missouri-st
+Monmouth,https://monmouthhawks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/monmouth
+Montana,https://gogriz.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/montana
+Montana St.,https://msubobcats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/montana-st
+Morehead St.,https://msueagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/morehead-st
+Morgan St.,https://morganstatebears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/morgan-st
+Mount St. Mary's,https://mountathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/mt-st-marys
+Murray St.,https://goracers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/murray-st
+N.C. A&T,https://ncataggies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/nc-at
+N.C. Central,https://nccueaglepride.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/nc-central
+Navy,https://navysports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/navy
+NC State,https://gopack.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/north-carolina-st
+Nebraska,https://huskers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/nebraska
+Nevada,https://nevadawolfpack.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/nevada
+New Hampshire,https://unhwildcats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/new-hampshire
+New Haven,https://newhavenchargers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/new-haven
+New Mexico,https://golobos.com/sports/mbball/schedule,https://golobos.com/sports/mbball/schedule
+New Mexico St.,https://nmstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/new-mexico-st
+Niagara,https://purpleeagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/niagara
+Nicholls,https://geauxcolonels.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/nicholls-st
+NIU,https://niuhuskies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northern-ill
+NJIT,https://njithighlanders.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/njit
+Norfolk St.,https://nsuspartans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/norfolk-st
+North Ala.,https://roarlions.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/north-ala
+North Carolina,https://goheels.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/north-carolina
+North Dakota,https://fightinghawks.com/sports/mens-basketball/schedule,https://fightinghawks.com/sports/mens-basketball/schedule
+North Dakota St.,https://gobison.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/north-dakota-st
+North Florida,https://unfospreys.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/north-florida
+North Texas,https://meangreensports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/north-texas
+Northeastern,https://nuhuskies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northeastern
+Northern Ariz.,https://nauathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northern-ariz
+Northern Colo.,https://uncbears.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northern-colo
+Northern Ky.,https://nkunorse.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northern-ky
+Northwestern,https://nusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northwestern
+Northwestern St.,https://nsudemons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/northwestern-st
+Notre Dame,https://fightingirish.com/sports/mbball/schedule,https://www.ncaa.com/schools/notre-dame
+Oakland,https://goldengrizzlies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/oakland
+Ohio,https://ohiobobcats.com/sports/mbball/schedule,https://www.ncaa.com/schools/ohio
+Ohio St.,https://ohiostatebuckeyes.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ohio-st
+Oklahoma,https://soonersports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/oklahoma
+Oklahoma St.,https://okstate.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/oklahoma-st
+Old Dominion,https://odusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/old-dominion
+Ole Miss,https://olemisssports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ole-miss
+Omaha,https://omahamavs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/neb-omaha
+Oral Roberts,https://oruathletics.com/sports/mens-basketball/schedule,https://oruathletics.com/sports/mens-basketball/schedule
+Oregon,https://goducks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/oregon
+Oregon St.,https://osubeavers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/oregon-st
+Pacific,https://pacifictigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/pacific
+Penn,https://pennathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/penn
+Penn St.,https://gopsusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/penn-st
+Pepperdine,https://pepperdinewaves.com/sports/mens-basketball/schedule,https://pepperdinewaves.com/sports/mens-basketball/schedule
+Pittsburgh,https://pittsburghpanthers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/pittsburgh
+Portland,https://portlandpilots.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/portland
+Portland St.,https://goviks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/portland-st
+Prairie View,https://pvpanthers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/prairie-view
+Presbyterian,https://gobluehose.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/presbyterian
+Princeton,https://goprincetontigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/princeton
+Providence,https://friars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/providence
+Purdue,https://purduesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/purdue
+Purdue Fort Wayne,https://gomastodons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ipfw
+Queens (NC),https://queensathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/queens-nc
+Quinnipiac,https://gobobcats.com/sports/mbball/schedule,https://gobobcats.com/sports/mbball/schedule
+Radford,https://radfordathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/radford
+Rhode Island,https://gorhody.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/rhode-island
+Rice,https://riceowls.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/rice
+Richmond,https://richmondspiders.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/richmond
+Rider,https://gobroncs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/rider
+Robert Morris,https://rmucolonials.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/robert-morris
+Rutgers,https://scarletknights.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/rutgers
+Sacramento St.,https://hornetsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/sacramento-st
+Sacred Heart,https://sacredheartpioneers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/sacred-heart
+Saint Joseph's,https://sjuhawks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/saint-josephs
+Saint Louis,https://slubillikens.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/saint-louis
+Saint Mary's (CA),https://smcgaels.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/st-marys-ca
+Saint Peter's,https://saintpeterspeacocks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/st-peters
+Sam Houston,https://gobearkats.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/sam-houston-st
+Samford,https://samfordsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/samford
+San Diego,https://usdtoreros.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/san-diego
+San Diego St.,https://goaztecs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/san-diego-st
+San Francisco,https://usfdons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/san-francisco
+San Jose St.,https://sjsuspartans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/san-jose-st
+Santa Clara,https://santaclarabroncos.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/santa-clara
+Seattle U,https://goseattleu.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/seattle
+Seton Hall,https://shupirates.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/seton-hall
+SFA,https://sfajacks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/stephen-f-austin
+Siena,https://sienasaints.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/siena
+SIUE,https://siuecougars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/siu-edwardsville
+SMU,https://smumustangs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/smu
+South Alabama,https://usajaguars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/south-ala
+South Carolina,https://gamecocksonline.com/sports/mbball/schedule/,https://www.ncaa.com/schools/south-carolina
+South Carolina St.,https://www.scsuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/south-carolina-st
+South Dakota,https://goyotes.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/south-dakota
+South Dakota St.,https://gojacks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/south-dakota-st
+South Fla.,https://gousfbulls.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/south-fla
+Southeast Mo. St.,https://semoredhawks.com/sports/mens-basketball/schedule,https://semoredhawks.com/sports/mens-basketball/schedule
+Southeastern La.,https://lionsports.net/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southeastern-la
+Southern California,https://usctrojans.com:443/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southern-california
+Southern Ill.,https://siusalukis.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southern-ill
+Southern Ind.,https://usiscreamingeagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southern-ind
+Southern Miss.,https://southernmiss.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southern-miss
+Southern U.,https://gojagsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southern-u
+Southern Utah,https://suutbirds.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/southern-utah
+St. Bonaventure,https://gobonnies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/st-bonaventure
+St. John's (NY),https://redstormsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/st-johns-ny
+St. Thomas (MN),https://tommiesports.com/sports/mbball/schedule,https://www.ncaa.com/schools/st-thomas-mn
+Stanford,https://gostanford.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/stanford
+Stetson,https://gohatters.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/stetson
+Stonehill,https://stonehillskyhawks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/stonehill
+Stony Brook,https://stonybrookathletics.com/sports/mens-basketball/schedule,https://stonybrookathletics.com/sports/mens-basketball/schedule
+Syracuse,https://cuse.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/syracuse
+Tarleton St.,https://tarletonsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/tarleton-st
+TCU,https://gofrogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/tcu
+Temple,https://owlsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/temple
+Tennessee,https://utsports.com/sports/mens-basketball/schedule?navigMW=mm,https://utsports.com/sports/mens-basketball/schedule?navigMW=mm
+Tennessee St.,https://tsutigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/tennessee-st
+Tennessee Tech,https://ttusports.com/sports/mbkb/{season}/schedule,https://ttusports.com/sports/mbkb/2026-27/schedule
+Texas,https://texaslonghorns.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/texas
+Texas A&M,https://12thman.com/sports/mens-basketball/schedule?path=mbball,https://12thman.com/sports/mens-basketball/schedule?path=mbball
+Texas Southern,https://tsusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/texas-southern
+Texas St.,https://txst.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/texas-st
+Texas Tech,https://texastech.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/texas-tech
+The Citadel,https://citadelsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/citadel
+Toledo,https://utrockets.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/toledo
+Towson,https://towsontigers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/towson
+Troy,https://troytrojans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/troy
+Tulane,https://tulanegreenwave.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/tulane
+Tulsa,https://tulsahurricane.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/tulsa
+UAB,https://uabsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uab
+UAlbany,https://ualbanysports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/albany-ny
+UC Davis,https://ucdavisaggies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uc-davis
+UC Irvine,https://ucirvinesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uc-irvine
+UC Riverside,https://gohighlanders.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uc-riverside
+UC San Diego,https://ucsdtritons.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uc-san-diego
+UC Santa Barbara,https://ucsbgauchos.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uc-santa-barbara
+UCF,https://ucfknights.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ucf
+UCLA,https://uclabruins.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ucla
+UConn,https://uconnhuskies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uconn
+UIC,https://uicflames.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ill-chicago
+UIW,https://uiwcardinals.com/sports/mens-basketball/schedule,https://uiwcardinals.com/sports/mens-basketball/schedule
+ULM,https://ulmwarhawks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/la-monroe
+UMass Lowell,https://goriverhawks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/umass-lowell
+UMBC,https://umbcretrievers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/umbc
+UMES,https://umeshawksports.com/sports/mens-basketball/schedule,https://umeshawksports.com/sports/mens-basketball/schedule
+UNC Asheville,https://uncabulldogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/unc-asheville
+UNC Greensboro,https://uncgspartans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/unc-greensboro
+UNCW,https://uncwsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/unc-wilmington
+UNI,https://unipanthers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/uni
+UNLV,https://unlvrebels.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/unlv
+USC Upstate,https://upstatespartans.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/usc-upstate
+UT Arlington,https://utamavs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/texas-arlington
+UT Martin,https://utmsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/ut-martin
+Utah,https://utahutes.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utah
+Utah St.,https://utahstateaggies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utah-st
+Utah Tech,https://utahtechtrailblazers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utah-tech
+Utah Valley,https://gouvu.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utah-valley
+UTEP,https://utepminers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utep
+UTRGV,https://goutrgv.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utrgv
+UTSA,https://goutsa.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/utsa
+Valparaiso,https://valpoathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/valparaiso
+Vanderbilt,https://vucommodores.com/sports/mbball/schedule,https://www.ncaa.com/schools/vanderbilt
+VCU,https://vcuathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/vcu
+Vermont,https://uvmathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/vermont
+Villanova,https://villanova.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/villanova
+Virginia,https://virginiasports.com/sports/mbball/schedule,https://www.ncaa.com/schools/virginia
+Virginia Tech,https://hokiesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/virginia-tech
+VMI,https://vmikeydets.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/vmi
+Wagner,https://wagnerathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/wagner
+Wake Forest,https://godeacs.com/sports/mbball/schedule,https://godeacs.com/sports/mbball/schedule
+Washington,https://gohuskies.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/washington
+Washington St.,https://wsucougars.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/washington-st
+Weber St.,https://weberstatesports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/weber-st
+West Florida,https://goargos.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/west-florida
+West Ga.,https://uwgathletics.com/sports/mens-basketball/schedule/{season},https://uwgathletics.com/sports/mens-basketball/schedule/2026-27
+West Virginia,https://wvusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/west-virginia
+Western Caro.,https://catamountsports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/western-caro
+Western Ill.,https://goleathernecks.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/western-ill
+Western Ky.,https://wkusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/western-ky
+Western Mich.,https://wmubroncos.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/western-mich
+Wichita St.,https://goshockers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/wichita-st
+William & Mary,https://tribeathletics.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/william-mary
+Winthrop,https://winthropeagles.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/winthrop
+Wisconsin,https://uwbadgers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/wisconsin
+Wofford,https://woffordterriers.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/wofford
+Wright St.,https://wsuraiders.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/wright-st
+Wyoming,https://gowyo.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/wyoming
+Xavier,https://goxavier.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/xavier
+Yale,https://yalebulldogs.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/yale
+Youngstown St.,https://ysusports.com/sports/mens-basketball/schedule,https://www.ncaa.com/schools/youngstown-st
