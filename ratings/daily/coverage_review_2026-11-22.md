@@ -4,8 +4,8 @@ The [November 23 publication run](https://github.com/Siddhu-S/ncaa-player-dashbo
 reported 939 of 945 BPM games and 922 of 945 RAPM games through November 22.
 The lists overlapped in four games, for 25 distinct matchups and 29 missing
 metric inputs. Replaying that cohort through the daily job's collector with
-input rules version 11 recovered all six BPM inputs and 17 RAPM inputs.
-Six RAPM inputs still require review.
+input rules version 11 recovered all six BPM inputs and 19 RAPM inputs.
+Four RAPM inputs still require review.
 
 ## Investigation and daily workflow changes
 
@@ -33,7 +33,9 @@ Six RAPM inputs still require review.
 5. Replayed starters and substitutions against both box scores. The daily
    job can now use matching school and ESPN replay times for a disputed
    player when their identity and scoring also agree and the times are
-   within five seconds. It ignores same-clock duplicate substitutions already
+   within five seconds. Arkansas's final PDF confirms Ilia Frolov's 3:29.
+   East Carolina's box and 1:50 substitution confirm Dreylan
+   Creasy-Quirindoongo's 1:50 appearance. It ignores same-clock duplicate substitutions already
    reflected in the lineup and adjacent, zero-time in/out records for
    unlisted players with no other actions. The two source-confirmed historical
    corrections for Utah Tech and UC Santa Barbara are keyed to the exact
@@ -67,11 +69,13 @@ counts are accepted box input rows.
 | 11-20 | North Texas at App State | — | 137 | Rebuilt the lineup from the official school play-by-play. [Source](https://appstatesports.com/sports/mens-basketball/stats/2026-27/north-texas/boxscore/10147) |
 | 11-20 | Western Kentucky at Richmond | — | 138 | Rebuilt the lineup from the official school play-by-play. [Source](https://richmondspiders.com/sports/mens-basketball/stats/2026-27/western-kentucky/boxscore/12126) |
 | 11-20 | South Alabama at SMU | 25 | 128 | Verified Keyne Costa’s name and jersey. [Source](https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401929459) |
+| 11-20 | Mississippi Valley State at Arkansas | — | 135 | Confirmed Ilia Frolov’s 3:29 in the official final stats. [Game book](https://arkansasrazorbacks.com/wp-content/uploads/2026/11/Gm-6-Stats-vs-Miss-Valley-State.pdf) |
 | 11-21 | Western Carolina at Wake Forest | 27 | 142 | Matched the team-only basket at 7:00 of the second half to both running scores. [Source](https://catamountsports.com/sports/mens-basketball/stats/2026-27/wake-forest/boxscore/16117) |
 | 11-21 | Army at Binghamton | — | 125 | Rebuilt the lineup from the official school play-by-play. [Source](https://binghamtonbearcats.com/sports/mens-basketball/stats/2026-27/army/boxscore/15838) |
 | 11-21 | Radford at Chattanooga | — | 125 | Rebuilt the lineup from the official school play-by-play. [Source](https://gomocs.com/sports/mens-basketball/stats/2026-27/radford/boxscore/18557) |
 | 11-21 | Queens University at LSU | — | 140 | Recognized bookkeeping turnovers attached to technical fouls. [Source](https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401921811) |
 | 11-21 | Cornell at Morgan State | 27 | 146 | Verified Trey Williams’s identity against Cornell’s roster. [Source](https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401924722) |
+| 11-21 | Southern Illinois at East Carolina | — | 145 | Confirmed the 1:50 appearance in East Carolina’s school box and replay. [Game book](https://ecupirates.com/sports/mens-basketball/stats/2026/southern-ill-/boxscore/14335) |
 | 11-22 | Towson at American University | — | 138 | Rebuilt the lineup from the official school play-by-play. [Source](https://aueagles.com/sports/mens-basketball/stats/2026-27/towson/boxscore/6069) |
 | 11-22 | Loyola Marymount at UC Irvine | 23 | — | Recovered Dom Bentho’s short stint from school substitutions. [Source](https://ucirvinesports.com/sports/mens-basketball/stats/2026-27/lmu/boxscore/14445) |
 | 11-22 | Delaware at UCLA | — | 133 | Removed a possession attributed to an unanchored rebound. [Source](https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920905) |
@@ -82,7 +86,5 @@ counts are accepted box input rows.
 | --- | --- | --- |
 | 11-14 | Northwestern State at Little Rock | The ESPN replay still has inconsistent substitutes at the start of the second half and at later stoppages after same-clock duplicate rows are removed. The school page did not provide a supported box with verified venue for the alternate replay. [School game book](https://nsudemons.com/sports/mens-basketball/stats/2026-27/little-rock/boxscore/14760) |
 | 11-19 | UTEP at New Mexico State | The same Moeller–Criss change is logged at 14:43 and 8:39 of the second half. Moeller shoots free throws between the timestamps. Removing the earlier change alone produces minutes that disagree by several minutes for both players. [School game book](https://utepminers.com/sports/mens-basketball/stats/2026-27/nm-state/boxscore/12558) |
-| 11-20 | Mississippi Valley State at Arkansas | ESPN lists Ilia Frolov at 2:00 while replaying its substitutions yields 3:29. The school play-by-play contains an unresolved substitute and cannot corroborate the minutes. [School game book](https://mvsusports.com/sports/mens-basketball/stats/2026-2027/arkansas/boxscore/10837) |
-| 11-21 | Southern Illinois at East Carolina | The ESPN rotation disagrees with the box for Dreylan Creasy-Quirindoongo, and the school replay fails the possession balance check. [School game book](https://ecupirates.com/sports/mens-basketball/stats/2026-27/southern-illinois/boxscore/14335) |
 | 11-22 | Dayton at Northwestern | The Grant Randall–Jalen Haynes swap repeats at 6:35 and 5:27 of the second half. Removing the repeat exposes another ESPN substitution for a player missing from its box. The school rotation also fails to reconcile. [School game book](https://daytonflyers.com/sports/mens-basketball/stats/2026-27/northwestern/boxscore/17840) |
-| 11-22 | Southern Miss at Valparaiso | The Gaines-Wyatt–Cerese exchange appears twice. Gaines-Wyatt records a shot between those entries. Removing the earlier swap lets the parser proceed but the individual scoring still fails to reconcile. [School game book](https://valpoathletics.com/sports/mens-basketball/stats/2026-27/southern-miss/boxscore/13223) |
+| 11-22 | Southern Miss at Valparaiso | The Gaines-Wyatt–Cerese exchange appears twice. Gaines-Wyatt records a shot between those entries. Removing the earlier swap leaves conflicting player minutes in the school replay and conflicting individual scoring in ESPN. [School game book](https://valpoathletics.com/sports/mens-basketball/stats/2026-27/southern-miss/boxscore/13223) |

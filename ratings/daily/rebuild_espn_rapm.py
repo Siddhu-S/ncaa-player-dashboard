@@ -71,8 +71,12 @@ REDUNDANT_SUBSTITUTIONS = {
 SUBSTITUTION_ACTORS = {
     "401928354": {(2, 455, "in", "5033017"): "5175397"},
 }
-# School box scores round these independently verified replay times.
+# Independent school boxes and play-by-play corroborate these replay times.
 VERIFIED_REPLAY_MINUTES = {
+    "401925740": ("https://arkansasrazorbacks.com/wp-content/uploads/2026/11/Gm-6-Stats-vs-Miss-Valley-State.pdf",
+                  {"Ilia Frolov": (3 * 60 + 29) / 60}),
+    "401920570": ("https://ecupirates.com/sports/mens-basketball/stats/2026/southern-ill-/boxscore/14335",
+                  {"Dreylan Creasy-Quirindoongo": (60 + 50) / 60}),
     "401911239": ("https://richmondspiders.com/sports/mens-basketball/stats/2026-27/southern-illinois/boxscore/12124",
                   {"Sam Simmons Jr.": 9, "Brock McClure": 2}),
     # The official substitution log gives stints of 2:20, 1:42 and 1:29.
