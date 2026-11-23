@@ -4,8 +4,8 @@ The [November 23 publication run](https://github.com/Siddhu-S/ncaa-player-dashbo
 reported 939 of 945 BPM games and 922 of 945 RAPM games through November 22.
 The lists overlapped in four games, for 25 distinct matchups and 29 missing
 metric inputs. Replaying that cohort through the daily job's collector with
-input rules version 11 recovered all six BPM inputs and 19 RAPM inputs.
-Four RAPM inputs still require review.
+input rules version 11 recovered all six BPM inputs and 20 RAPM inputs.
+Three RAPM inputs still require review.
 
 ## Investigation and daily workflow changes
 
@@ -38,8 +38,10 @@ Four RAPM inputs still require review.
    Creasy-Quirindoongo's 1:50 appearance. It ignores same-clock duplicate substitutions already
    reflected in the lineup and adjacent, zero-time in/out records for
    unlisted players with no other actions. The two source-confirmed historical
-   corrections for Utah Tech and UC Santa Barbara are keyed to the exact
-   ESPN timestamp, player, and substitution direction.
+   corrections for Utah Tech, UC Santa Barbara, and Dayton are keyed to the
+   exact source timestamp, player, and substitution direction. Dayton's
+   official box includes Jaron McKie's 1:14, and Haynes's turnover between
+   the two recorded swaps confirms the earlier entry.
 6. Rechecked possession control. The replay skips a rebound without a
    recorded attempt to anchor a possession. A turnover recorded against
    the same player or team on a technical-foul stoppage does not close a
@@ -79,12 +81,12 @@ counts are accepted box input rows.
 | 11-22 | Towson at American University | — | 138 | Rebuilt the lineup from the official school play-by-play. [Source](https://aueagles.com/sports/mens-basketball/stats/2026-27/towson/boxscore/6069) |
 | 11-22 | Loyola Marymount at UC Irvine | 23 | — | Recovered Dom Bentho’s short stint from school substitutions. [Source](https://ucirvinesports.com/sports/mens-basketball/stats/2026-27/lmu/boxscore/14445) |
 | 11-22 | Delaware at UCLA | — | 133 | Removed a possession attributed to an unanchored rebound. [Source](https://www.espn.com/mens-college-basketball/playbyplay/_/gameId/401920905) |
+| 11-22 | Dayton at Northwestern | — | 119 | Kept the 6:35 Randall–Haynes swap and dropped its 5:27 repeat in the school replay. The official box includes McKie’s 1:14. [Final official report](https://daytonflyers.com/documents/2026/11/22/2924476.PDF) |
 
 ## RAPM still open
 
 | Date | Matchup | Why the replay stayed open |
 | --- | --- | --- |
 | 11-14 | Northwestern State at Little Rock | The ESPN replay still has inconsistent substitutes at the start of the second half and at later stoppages after same-clock duplicate rows are removed. The school page did not provide a supported box with verified venue for the alternate replay. [School game book](https://nsudemons.com/sports/mens-basketball/stats/2026-27/little-rock/boxscore/14760) |
-| 11-19 | UTEP at New Mexico State | The same Moeller–Criss change is logged at 14:43 and 8:39 of the second half. Moeller shoots free throws between the timestamps. Removing the earlier change alone produces minutes that disagree by several minutes for both players. [School game book](https://utepminers.com/sports/mens-basketball/stats/2026-27/nm-state/boxscore/12558) |
-| 11-22 | Dayton at Northwestern | The Grant Randall–Jalen Haynes swap repeats at 6:35 and 5:27 of the second half. Removing the repeat exposes another ESPN substitution for a player missing from its box. The school rotation also fails to reconcile. [School game book](https://daytonflyers.com/sports/mens-basketball/stats/2026-27/northwestern/boxscore/17840) |
-| 11-22 | Southern Miss at Valparaiso | The Gaines-Wyatt–Cerese exchange appears twice. Gaines-Wyatt records a shot between those entries. Removing the earlier swap leaves conflicting player minutes in the school replay and conflicting individual scoring in ESPN. [School game book](https://valpoathletics.com/sports/mens-basketball/stats/2026-27/southern-miss/boxscore/13223) |
+| 11-19 | UTEP at New Mexico State | The same Moeller–Criss change is logged at 14:43 and 8:39 of the second half. Criss commits a foul and Moeller shoots free throws between the two timestamps. The final game book has the same conflicting sequence. Removing the earlier swap alone produces minutes several minutes away from both players’ official totals. [School game book](https://utepminers.com/sports/mens-basketball/stats/2026-27/nm-state/boxscore/12558) |
+| 11-22 | Southern Miss at Valparaiso | The Gaines-Wyatt–Cerese exchange appears twice. The official report credits Cerese with a basket and Gaines-Wyatt with a shot between those entries. Removing the earlier swap leaves conflicting minutes in the school replay and conflicting individual scoring in ESPN. [School game book](https://valpoathletics.com/sports/mens-basketball/stats/2026-27/southern-miss/boxscore/13223) |

@@ -32,6 +32,14 @@ SCHOOL_REPLAY_MINUTES = {
 }
 
 
+# Dayton's final report credits Haynes with a turnover between the two
+# logged swaps. The earlier swap also reproduces the official box minutes.
+# https://daytonflyers.com/documents/2026/11/22/2924476.PDF
+SCHOOL_DUPLICATE_SWAPS = {
+    "401920736": (2, 395, 327, {("out", "RANDALL,GRANT"), ("in", "HAYNES,JALEN")}),
+}
+
+
 def text(value):
     return " ".join(unescape(re.sub(r"<[^>]*>", " ", value)).split())
 
@@ -328,6 +336,13 @@ def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event=
     periods = [int(period["number"]) for period in book["periodsWithPlays"] if period["plays"]]
     if school_final != final or len(periods) < 2 or periods != list(range(1, len(periods) + 1)):
         raise ValueError("School play-by-play is missing or has the wrong final score")
+    if swap := SCHOOL_DUPLICATE_SWAPS.get(event):
+        period, first, repeated, actors = swap
+        away = clubs["away"]
+        earlier = {(p.kind, p.player) for p in plays if (p.period, p.clock, p.team) == (period, first, away)}
+        if actors <= earlier:
+            plays = [p for p in plays if (p.period, p.clock, p.team) != (period, repeated, away)
+                     or (p.kind, p.player) not in actors]
     observations, minutes, bad_seconds, _, _ = replay(plays, players, final, team_baskets=team_baskets)
     if bad_seconds:
         raise ValueError("School play-by-play does not reproduce box-score playing times")
