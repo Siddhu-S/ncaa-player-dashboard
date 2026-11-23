@@ -22,11 +22,12 @@ from rapm_repairs import MISSING_ROSTER_PLAYERS, expected_score
 from rebuild_espn_rapm import ESPN_NAME_VARIANTS, ESPN_ROSTER_JERSEYS, espn_game, replay
 import ratings_store as store
 from school_gamebooks import (candidate_urls, fetch_html, gamebook_urls, parse_gamebook,
-                              school_aliases, school_gamebook, school_possessions, school_schedules)
+                              schedule_gamebooks, school_aliases, school_gamebook,
+                              school_possessions, school_schedules)
 
 # Increment INPUT_RULES_VERSION when validation, source selection or curated
 # corrections change. The next successful run revalidates stored games.
-INPUT_RULES_VERSION = 9
+INPUT_RULES_VERSION = 10
 INPUT_MODEL_VERSION = (f"bpm-college-roster-v2+rapm-ridge-2000-decay-{RAPM_HALF_LIFE_DAYS}d-v2"
                        f"+inputs-v{INPUT_RULES_VERSION}")
 MODEL_VERSION = INPUT_MODEL_VERSION + "+epm-bpm-prior-v1"
@@ -578,7 +579,7 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp, *, source_r
     source_reviews = source_reviews or {}
     school_boxes = load_school_boxes(season)
     school_urls = gamebook_urls(season)
-    schedules = school_schedules()
+    schedules = school_schedules(season)
     teams, raw, games, sources, scores, known, ids, aliases = catalog(
         inputs, scratch, season, cutoff, dates, previous)
     ncaa_rows = defaultdict(list)
@@ -674,6 +675,15 @@ def collect(inputs, scratch, season, cutoff, dates, previous, stamp, *, source_r
     event_ids = {s["provider_game_id"] for rows in sources.values() for s in rows if s["provider"] == "espn"}
     with ThreadPoolExecutor(max_workers=6) as pool:
         summaries = {eid: (data, error) for eid, data, error in pool.map(fetch_box, sorted(event_ids))}
+
+    unresolved_schedules = {
+        schedules[teams[game[f"{side}_team_id"]]]
+        for gid, game in games.items() if gid not in observations and not score_conflict(gid)
+        for side in ("home", "away")
+        if teams[game[f"{side}_team_id"]] in schedules
+    }
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        list(pool.map(schedule_gamebooks, sorted(unresolved_schedules)))
 
     for gid, game in games.items():
         urls = list({s["url"] for s in sources[gid]})
