@@ -55,7 +55,23 @@ minutes with a validated feed box when the active roster and individual
 scorers agree, keeping any remaining counting-stat disagreement open.
 Rows with an appearance
 rounded to zero in the school box include a play-by-play source for
-the measured seconds.
+the measured seconds. The live fallback can also recover a rounded-zero
+bench appearance when its complete substitution pairs establish a
+positive stint of less than a minute and the completed box passes validation.
+A team basket can enter coverage when ESPN and the school play-by-play
+agree on the period, time, scoring team, and points. BPM uses the final
+score for the team margin and leaves individual points as credited.
+
+The RAPM replay ignores a redundant substitution only when its effect is
+already reflected in the lineup at that clock, or when an adjacent
+check-in and check-out with no elapsed time are the unlisted player's
+only actions. When school box minutes disagree with school play-by-play,
+the same player's scoring and replayed time can be corroborated by ESPN
+before the school lineup is accepted. Rebounds without a preceding live
+attempt and turnovers attached to a technical foul are checked against
+possession control. Remaining lineup conflicts stay in the retry queue.
+See the [November 22 coverage review](coverage_review_2026-11-22.md) for
+the original gaps, evidence, and decisions.
 Increment `INPUT_RULES_VERSION` when changing validation or source
 selection rules or shipping historical corrections. The first daily run
 after a version change revalidates previously processed games, including

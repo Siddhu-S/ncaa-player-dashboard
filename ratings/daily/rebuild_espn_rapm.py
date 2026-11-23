@@ -6,13 +6,19 @@ import json
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
-from itertools import groupby
+from itertools import groupby, pairwise
 from pathlib import Path
 
 from player_ratings import ROOT, feed_rows, game_logs, key, roster_jersey_ids, roster_jersey_player, unique
 from rapm_repairs import MISSING_ROSTER_PLAYERS
 
 SOURCE_NOTES = {
+    "401925941": ("The school box has no Dallin Grant appearance. The substitution log records "
+                  "his same-clock entry and exit before Vandermyde enters, then repeats the swap.",
+                  "https://gohuskies.com/sports/mens-basketball/stats/2026-27/utah-tech/boxscore/25436"),
+    "401928354": ("UC Santa Barbara's log records Vartiainen entering at 7:35 and leaving at 7:17. "
+                  "The redundant Little in/out at 7:35 contributes no playing time.",
+                  "https://ucsbgauchos.com/sports/mens-basketball/stats/2026-27/pepperdine/boxscore/12896"),
     "401925940": ("Utah State's game log records Brown's layup before the "
                   "substitutions at 18:19 in the second half.",
                   "https://utahstateaggies.com/sports/mens-basketball/stats/2026-27/utah-tech/boxscore/16847"),
@@ -55,6 +61,16 @@ SOURCE_NOTES = {
                   "Control around the 2H 3:37 foul remains unconfirmed.",
                   "https://www.espn.com/watch/player/_/id/ac001f9d-e2d2-4ab7-8006-714c7b5991ac"),
 }
+# Match the exact provider events so a corrected upstream log can pass as-is.
+REDUNDANT_SUBSTITUTIONS = {
+    "401925941": {
+        (2, 629, "in", "5176272"), (2, 629, "out", "5176272"),
+        (2, 554, "out", "5176272"), (2, 554, "in", "5241401"),
+    },
+}
+SUBSTITUTION_ACTORS = {
+    "401928354": {(2, 455, "in", "5033017"): "5175397"},
+}
 # School box scores round these independently verified replay times.
 VERIFIED_REPLAY_MINUTES = {
     "401911239": ("https://richmondspiders.com/sports/mens-basketball/stats/2026-27/southern-illinois/boxscore/12124",
@@ -66,6 +82,8 @@ VERIFIED_REPLAY_MINUTES = {
                   {"Manok Lual": 3, "Matar Wade": 2}),
 }
 ESPN_NAME_VARIANTS = {
+    # South Alabama's official roster lists the same #20 as Keyne Costa.
+    ("6", "Keyne Costa"): ("11644899", "20", None),
     # San Diego State lists its #45, Jeremiah Cherry, by his nickname.
     # https://goaztecs.com/sports/mens-basketball/roster/player/bear-cherry
     ("21", "Bear Cherry"): ("11954181", "45", None),
@@ -221,11 +239,18 @@ def espn_game(summary, event=""):
         if kind:
             actors = row.get("participants", [])
             player = actors[0]["athlete"]["id"] if actors else ""
+            if kind == "shot" and not player and re.match(r"team\s+makes\b", text, re.I):
+                kind = "team_basket"
             plays.append(Play(row["period"]["number"], seconds(row["clock"]["displayValue"]),
                               kind, row.get("team", {}).get("id", ""), player,
                               int(row["scoreValue"]) if row.get("scoringPlay") else 0, last, single))
         elif row.get("scoringPlay"):
             raise ValueError(f"unrecognized scoring play: {text}")
+    redundant = REDUNDANT_SUBSTITUTIONS.get(event, ())
+    actors = SUBSTITUTION_ACTORS.get(event, {})
+    if redundant or actors:
+        plays = [replace(play, player=actors.get((play.period, play.clock, play.kind, play.player), play.player))
+                 for play in plays if (play.period, play.clock, play.kind, play.player) not in redundant]
     if event in SHOT_CORRECTIONS:
         period, clock, original, corrected = SHOT_CORRECTIONS[event]
         index, = (i for i, p in enumerate(plays) if
@@ -354,6 +379,7 @@ def sidearm_game(box, teams, *, resolve_actor=None):
             )
 
     plays = []
+    score = (0, 0)
     for period in box["periodsWithPlays"]:
         number = int(period["number"])
         for row in period["plays"]:
@@ -372,12 +398,23 @@ def sidearm_game(box, teams, *, resolve_actor=None):
                         "BLOCK": "block"}.get(action)
             if kind:
                 team = clubs.get(row["teamId"], "")
+                next_score = score
+                if points and row.get("homeScore") is not None and row.get("visitingScore") is not None:
+                    next_score = int(row["homeScore"]), int(row["visitingScore"])
                 player = row["checkname"]
                 if player == "TEAM":
                     player = ""
+                    if kind == "shot" and points:
+                        kind = "team_basket"
+                        delta = tuple(after - before for before, after in zip(score, next_score))
+                        if delta == (points, 0):
+                            team = teams["home"]
+                        elif delta == (0, points):
+                            team = teams["away"]
                 elif player and resolve_actor and (team, player) not in players:
                     player = resolve_actor(team, player)
                 plays.append(Play(number, seconds(row["time"]), kind, team, player, points))
+                score = next_score
         plays.append(Play(number, 0, "end"))
     # The school reports individual attempts. At a dead ball, consecutive
     # attempts by the same shooter are one trip.
@@ -392,7 +429,38 @@ def sidearm_game(box, teams, *, resolve_actor=None):
     return final, players, plays
 
 
-def replay(plays, players, final):
+def short_stint_minutes(plays, team, player):
+    """Recover a rounded-zero bench appearance from complete substitution pairs."""
+    substitutions = list(dict.fromkeys(
+        p for p in plays if (p.team, p.player) == (team, player) and p.kind in {"in", "out"}
+    ))
+    if not substitutions or len(substitutions) % 2:
+        return 0
+    elapsed = 0
+    for entry, exit in zip(substitutions[::2], substitutions[1::2]):
+        if entry.kind != "in" or exit.kind != "out" or entry.period != exit.period:
+            return 0
+        if entry.clock < exit.clock:
+            return 0
+        elapsed += entry.clock - exit.clock
+    return elapsed / 60 if 0 < elapsed < 60 else 0
+
+
+def remove_zero_time_substitutions(plays, players):
+    # Adjacent in/out records for an athlete excluded from the box do not
+    # change a lineup if no game time or basketball action separates them.
+    appearances = Counter((play.team, play.player) for play in plays if play.player)
+    ignored = set()
+    for index, (entry, exit) in enumerate(pairwise(plays)):
+        actor = entry.team, entry.player
+        if (entry.player and entry.kind == "in" and exit.kind == "out"
+                and actor not in players and appearances[actor] == 2
+                and (entry.period, entry.clock, *actor) == (exit.period, exit.clock, exit.team, exit.player)):
+            ignored.update((index, index + 1))
+    return [play for index, play in enumerate(plays) if index not in ignored]
+
+
+def replay(plays, players, final, *, team_baskets=()):
     lineups = {team: {player for (club, player), row in players.items() if club == team and row[2]}
                for team in final}
     if any(len(lineup) != 5 for lineup in lineups.values()):
@@ -404,7 +472,9 @@ def replay(plays, players, final):
     offense, anchor, points, disputed = "", None, 0, False
     technical = Counter()
     technical_clock = None
+    technical_actors = set()
     technical_points = Counter()
+    verified_team_baskets = Counter(team_baskets)
     previous = None
 
     def tick(elapsed):
@@ -425,6 +495,14 @@ def replay(plays, players, final):
             possessions.append((action, offense, points, lineup, disputed))
         offense, anchor, points, disputed = "", None, 0, False
 
+    plays = remove_zero_time_substitutions(plays, players)
+    next_live = {}
+    following = None
+    for play in reversed(plays):
+        if play.kind == "turnover":
+            next_live[play] = following
+        if play.kind in {"shot", "team_basket", "turnover", "off_rebound", "def_rebound", "jump", "end"}:
+            following = play
     for period, half in groupby(plays, key=lambda p: p.period):
         clock = 1200 if period <= 2 else 300
         if previous is not None and period != previous + 1:
@@ -436,29 +514,48 @@ def replay(plays, players, final):
             clock = time
             if technical_clock != time:
                 technical.clear()
+                technical_actors.clear()
+            applied_substitutions = set()
             for i, play in enumerate(block):
                 kind, team, player = play.kind, play.team, play.player
                 if kind in {"in", "out", "bad_sub"}:
                     if (team, player) not in players or kind == "bad_sub":
                         raise ValueError("unknown substitution")
                     if (player in lineups[team]) != (kind == "out"):
+                        if play in applied_substitutions:
+                            continue
                         raise ValueError("conflicting substitution")
+                    applied_substitutions.add(play)
                     if kind == "in":
                         lineups[team].add(player)
                     else:
                         lineups[team].remove(player)
                     continue
+                if kind == "team_basket":
+                    evidence_key = period, time, team, play.points
+                    if verified_team_baskets[evidence_key] <= 0:
+                        raise ValueError("Team-only basket is not corroborated")
+                    verified_team_baskets[evidence_key] -= 1
+                    kind = "shot"
+                elif play.points:
+                    player_points[team, player] += play.points
                 if play.points:
                     scoring[team] += play.points
-                    player_points[team, player] += play.points
                 if kind == "technical":
                     technical[other[team]] += 2
+                    technical_actors.add((team, player))
                     technical_clock = time
                     continue
                 if kind == "free_throw" and technical[team]:
                     technical[team] -= 1
                     technical_points[team] += play.points
                     continue
+                if kind == "turnover" and (team, player) in technical_actors and technical[other[team]]:
+                    following = next_live.get(play)
+                    if following and following.period == period and following.team == team and following.kind == "shot":
+                        # A bookkeeping turnover attached to a technical does
+                        # not end the trip when the charged team retains control.
+                        continue
                 if kind == "end":
                     finish()
                     continue
@@ -477,9 +574,9 @@ def replay(plays, players, final):
                 owner = other[team] if kind == "def_rebound" else team
                 if offense and owner != offense:
                     finish()
-                if kind == "def_rebound" and anchor is None:
-                    # A duplicated rebound or one without a preceding attempt
-                    # leaves no recorded shot to close.
+                if kind in {"off_rebound", "def_rebound"} and anchor is None:
+                    # A rebound without a recorded live attempt provides no
+                    # possession anchor. The next live play establishes control.
                     continue
                 offense = owner
                 snapshot = tuple((club, tuple(sorted(ids))) for club, ids in lineups.items())

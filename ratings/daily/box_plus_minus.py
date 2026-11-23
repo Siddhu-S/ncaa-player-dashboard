@@ -137,7 +137,8 @@ def restore_mikalauskas(sides, player_id):
     arlington.append(player)
 
 
-def season_bpm(game_rows, season, cutoff, *, include_box_id=False, listed_positions=None):
+def season_bpm(game_rows, season, cutoff, *, include_box_id=False, listed_positions=None,
+               official_scores=None):
     listed_positions = listed_positions or {}
     games = defaultdict(lambda: defaultdict(list))
     mikalauskas_id = "ncaa:11641617"
@@ -158,7 +159,7 @@ def season_bpm(game_rows, season, cutoff, *, include_box_id=False, listed_positi
     names, last_dates = {}, {}
     matches, accepted_dates = [], []
     rejected = Counter()
-    for (played, _), sides in sorted(games.items()):
+    for (played, game_id), sides in sorted(games.items()):
         if len(sides) != 2:
             rejected["missing_opponent_box"] += 1
             continue
@@ -186,7 +187,9 @@ def season_bpm(game_rows, season, cutoff, *, include_box_id=False, listed_positi
         ):
             rejected["invalid_shot_or_possession_total"] += 1
             continue
-        margin = boxes[0][1]["points"].sum() - boxes[1][1]["points"].sum()
+        scoring = (official_scores or {}).get(game_id)
+        margin = (scoring[first] - scoring[second] if scoring else
+                  boxes[0][1]["points"].sum() - boxes[1][1]["points"].sum())
         matches.append((first, second, {"H": 1, "A": -1, "N": 0}[venues[0]], pace, margin))
         accepted_dates.append(played)
 
