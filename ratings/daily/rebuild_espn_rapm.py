@@ -13,6 +13,9 @@ from player_ratings import ROOT, feed_rows, game_logs, key, roster_jersey_ids, r
 from rapm_repairs import MISSING_ROSTER_PLAYERS
 
 SOURCE_NOTES = {
+    "401911534": ("Broadcast review confirms Moeller replaced Criss at 2H 12:48 after Criss's foul. "
+                  "The official game book confirms the order of three free-throw trips.",
+                  "https://utepminers.com/sports/mens-basketball/stats/2026-27/nm-state/boxscore/12558"),
     "401925941": ("The school box has no Dallin Grant appearance. The substitution log records "
                   "his same-clock entry and exit before Vandermyde enters, then repeats the swap.",
                   "https://gohuskies.com/sports/mens-basketball/stats/2026-27/utah-tech/boxscore/25436"),
@@ -199,6 +202,40 @@ def seconds(value):
     return int(minutes or 0) * 60 + float(rest)
 
 
+def repair_utep_replay(plays):
+    utep, criss, moeller = "2638", "5210813", "5313847"
+    stoppage = [i for i, play in enumerate(plays) if (play.period, play.clock) == (2, 768)]
+    swap = [plays[i] for i in stoppage if (plays[i].team, plays[i].player) in
+            {(utep, criss), (utep, moeller)} and plays[i].kind in {"in", "out"}]
+    fouls = [i for i in stoppage if (plays[i].team, plays[i].player, plays[i].kind) == (utep, criss, "foul")]
+    if not swap and len(fouls) == 1:
+        i = fouls[0] + 1
+        plays[i:i] = [Play(2, 768, "out", utep, criss), Play(2, 768, "in", utep, moeller)]
+
+    # Apply the school order only to the observed ESPN blocks. If the feed
+    # has already corrected a block, use its order as supplied.
+    free_throw_trips = (
+        (1024, "5312326", "foul free_throw out in free_throw free_throw dead_rebound",
+         [(1, False), (1, True), (0, False)], (0, 5, 6, 1, 2, 3, 4)),
+        (567, "5175354", "foul out in free_throw def_rebound free_throw",
+         [(0, True), (1, False)], (0, 5, 1, 2, 3, 4)),
+        (123, criss, "shot def_rebound foul out out in in out in free_throw free_throw dead_rebound",
+         [(1, True), (0, False)], (0, 1, 2, 10, 11, 3, 4, 5, 6, 7, 8, 9)),
+    )
+    for clock, shooter, kinds, attempts, order in free_throw_trips:
+        indices = [i for i, play in enumerate(plays) if (play.period, play.clock) == (2, clock)]
+        block = [plays[i] for i in indices]
+        if [play.kind for play in block] != kinds.split():
+            continue
+        free_throws = [play for play in block if play.kind == "free_throw"]
+        if [(play.team, play.player, play.points, play.last_free_throw) for play in free_throws] != [
+            (utep, shooter, points, last) for points, last in attempts
+        ]:
+            continue
+        for i, source in zip(indices, order):
+            plays[i] = block[source]
+
+
 def espn_game(summary, event=""):
     game = summary["header"]["competitions"][0]
     teams = {club["homeAway"]: club["id"] for club in game["competitors"]}
@@ -250,6 +287,8 @@ def espn_game(summary, event=""):
                               int(row["scoreValue"]) if row.get("scoringPlay") else 0, last, single))
         elif row.get("scoringPlay"):
             raise ValueError(f"unrecognized scoring play: {text}")
+    if event == "401911534":
+        repair_utep_replay(plays)
     redundant = REDUNDANT_SUBSTITUTIONS.get(event, ())
     actors = SUBSTITUTION_ACTORS.get(event, {})
     if redundant or actors:

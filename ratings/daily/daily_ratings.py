@@ -27,7 +27,7 @@ from school_gamebooks import (candidate_urls, corroborated_team_baskets, fetch_h
 
 # Increment INPUT_RULES_VERSION when validation, source selection or curated
 # corrections change. The next successful run revalidates stored games.
-INPUT_RULES_VERSION = 11
+INPUT_RULES_VERSION = 12
 INPUT_MODEL_VERSION = (f"bpm-college-roster-v2+rapm-ridge-2000-decay-{RAPM_HALF_LIFE_DAYS}d-v2"
                        f"+inputs-v{INPUT_RULES_VERSION}")
 MODEL_VERSION = INPUT_MODEL_VERSION + "+epm-bpm-prior-v1"
