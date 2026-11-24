@@ -90,3 +90,17 @@ counts are accepted box input rows.
 | 11-14 | Northwestern State at Little Rock | The ESPN replay still has inconsistent substitutes at the start of the second half and at later stoppages after same-clock duplicate rows are removed. The school page did not provide a supported box with verified venue for the alternate replay. [School game book](https://nsudemons.com/sports/mens-basketball/stats/2026-27/little-rock/boxscore/14760) |
 | 11-19 | UTEP at New Mexico State | The same Moeller–Criss change is logged at 14:43 and 8:39 of the second half. Criss commits a foul and Moeller shoots free throws between the two timestamps. The final game book has the same conflicting sequence. Removing the earlier swap alone produces minutes several minutes away from both players’ official totals. [School game book](https://utepminers.com/sports/mens-basketball/stats/2026-27/nm-state/boxscore/12558) |
 | 11-22 | Southern Miss at Valparaiso | The Gaines-Wyatt–Cerese exchange appears twice. The official report credits Cerese with a basket and Gaines-Wyatt with a shot between those entries. Removing the earlier swap leaves conflicting minutes in the school replay and conflicting individual scoring in ESPN. [School game book](https://valpoathletics.com/sports/mens-basketball/stats/2026-27/southern-miss/boxscore/13223) |
+
+## UTEP follow-up
+
+Broadcast review confirmed Criss (#0) replacing Moeller (#6) at 14:43
+of the second half and Moeller replacing Criss after Criss's foul at 12:48.
+The second exchange is missing from ESPN's play-by-play. The official game
+book also establishes the actual order of the free throws, substitutions,
+and rebounds at 17:04, 9:27, and 2:03 of the second half. Input rules
+version 12 applies those verified corrections to the affected ESPN event.
+The replay reconciles player points and the 84–69 final, retaining 70 UTEP
+possessions and 68 New Mexico State possessions. The game remains open
+because the replay gives Moeller 21:46 and Criss 16:26, compared with ESPN's
+18 and 21 minutes and the school's 17 and 21 minutes.
+[Official game book](https://utepminers.com/sports/mens-basketball/stats/2026-27/nm-state/boxscore/12558)
