@@ -39,6 +39,11 @@ SCHOOL_DUPLICATE_SWAPS = {
     "401920736": (2, 395, 327, {("out", "RANDALL,GRANT"), ("in", "HAYNES,JALEN")}),
 }
 
+SANTA_CLARA_SUBSTITUTIONS = {
+    (1, 439, "out", "ZUGIC,FEDOR"), (1, 439, "in", "GAVALYUGOV,SASH"),
+    (1, 336, "out", "GAVALYUGOV,SASH"), (1, 336, "in", "ZUGIC,FEDOR"),
+    (2, 327, "out", "GUEYE,SIDI"), (2, 327, "in", "DARLAN,THIERRY"),
+}
 
 def text(value):
     return " ".join(unescape(re.sub(r"<[^>]*>", " ", value)).split())
@@ -300,9 +305,9 @@ def corroborated_team_baskets(book, clubs, summary, event):
         return ()
     try:
         _, _, school_plays = sidearm_game(book, clubs)
-        if not any(play.kind == "team_basket" for play in school_plays):
+        if event != "401921207" and not any(play.kind == "team_basket" for play in school_plays):
             return ()
-        espn_clubs, _, _, espn_plays = espn_game(summary, event)
+        espn_clubs, _, espn_players, espn_plays = espn_game(summary, event)
     except (KeyError, TypeError, ValueError):
         return ()
     identifiers = {team: clubs[side] for side, team in espn_clubs.items()}
@@ -310,6 +315,22 @@ def corroborated_team_baskets(book, clubs, summary, event):
                        for p in espn_plays if p.kind == "team_basket" and p.team in identifiers)
     official = Counter((p.period, p.clock, p.team, p.points)
                        for p in school_plays if p.kind == "team_basket")
+    if event == "401921207":
+        # The school box marks Carter DNP and lists no individual credit for
+        # the two points. Both play logs show the same scoring event.
+        team = clubs["away"]
+        espn_team = espn_clubs["away"]
+        school_dnp = any(row["checkName"] == "CARTER,JAHVIN" and int(row["gamePlayed"]) == 0
+                         for row in book["visitingTeam"]["players"])
+        espn_row = espn_players.get((espn_team, "5149117"))
+        school_basket = [p for p in school_plays if
+                         (p.period, p.clock, p.kind, p.team, p.player, p.points) ==
+                         (1, 518, "shot", team, "CARTER,JAHVIN", 2)]
+        espn_basket = [p for p in espn_plays if
+                       (p.period, p.clock, p.kind, p.team, p.player, p.points) ==
+                       (1, 518, "shot", espn_team, "5149117", 2)]
+        if school_dnp and espn_row and espn_row[3:] == (0, 2) and len(school_basket) == len(espn_basket) == 1:
+            return ((1, 518, team, 2),)
     return tuple((recorded & official).elements())
 
 
@@ -343,6 +364,16 @@ def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event=
         if actors <= earlier:
             plays = [p for p in plays if (p.period, p.clock, p.team) != (period, repeated, away)
                      or (p.kind, p.player) not in actors]
+    santa_clara_review = False
+    if event == "401917543":
+        away = clubs["away"]
+        substitutions = Counter((p.period, p.clock, p.kind, p.player) for p in plays if p.team == away)
+        retained = {(1, 438, "out", "GAVALYUGOV,SASH"), (1, 438, "in", "ZUGIC,FEDOR"),
+                    (2, 358, "out", "GUEYE,SIDI"), (2, 358, "in", "DARLAN,THIERRY")}
+        if all(substitutions[entry] == 1 for entry in SANTA_CLARA_SUBSTITUTIONS | retained):
+            plays = [p for p in plays if p.team != away or
+                     (p.period, p.clock, p.kind, p.player) not in SANTA_CLARA_SUBSTITUTIONS]
+            santa_clara_review = True
     observations, minutes, bad_seconds, _, _ = replay(plays, players, final, team_baskets=team_baskets)
     if bad_seconds:
         raise ValueError("School play-by-play does not reproduce box-score playing times")
@@ -365,7 +396,9 @@ def school_possessions(book, mapped, clubs, final, roster, player_ids, *, event=
                                   verified_minutes=verified[1], source_urls=verified[2]))
     possessions, counts, excluded = [], Counter(), 0
     for action, offense, points, lineup, disputed in observations:
-        if disputed:
+        # The 7:18 swap reproduces box minutes, but Gavalyugov is credited
+        # with plays before the repeated swap at 5:36. Omit that interval.
+        if disputed or (santa_clara_review and action.period == 1 and 336 <= action.clock <= 439):
             excluded += 1
             continue
         lineup_by_team = dict(lineup)

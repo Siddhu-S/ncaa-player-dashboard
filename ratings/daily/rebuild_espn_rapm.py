@@ -76,6 +76,9 @@ SUBSTITUTION_ACTORS = {
 }
 # Independent school boxes and play-by-play corroborate these replay times.
 VERIFIED_REPLAY_MINUTES = {
+    # Both school play logs and ESPN reconstruct 9:07. The box lists 8.
+    "401928830": ("https://gozips.com/sports/mens-basketball/stats/2026-27/wright-state/boxscore/11635",
+                  {"Marvin Musiime-Kamali": 547 / 60}),
     "401925740": ("https://arkansasrazorbacks.com/wp-content/uploads/2026/11/Gm-6-Stats-vs-Miss-Valley-State.pdf",
                   {"Ilia Frolov": (3 * 60 + 29) / 60}),
     "401920570": ("https://ecupirates.com/sports/mens-basketball/stats/2026/southern-ill-/boxscore/14335",
@@ -89,6 +92,9 @@ VERIFIED_REPLAY_MINUTES = {
                   {"Manok Lual": 3, "Matar Wade": 2}),
 }
 ESPN_NAME_VARIANTS = {
+    # Akron lists the NCAA roster's Halil Barre as Chabi Barre, #5.
+    # https://gozips.com/sports/mens-basketball/roster/chabi-barre/10210
+    ("2006", "Chabi Barre"): ("11710410", "5", 76774),
     # South Alabama's official roster lists the same #20 as Keyne Costa.
     ("6", "Keyne Costa"): ("11644899", "20", None),
     # San Diego State lists its #45, Jeremiah Cherry, by his nickname.
