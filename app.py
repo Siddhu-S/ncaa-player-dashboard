@@ -5304,10 +5304,11 @@ app_ui = ui.page_fluid(
         ui.tags.script(f"""
             (function() {{
                 var KEY = {json.dumps(TRITON_TRACKER_STORAGE_KEY)};
-                function readIds() {{
+                var PREVIEW_KEY = {json.dumps(None if D1_PREVIEW_SNAPSHOT else TRITON_TRACKER_STORAGE_KEY + "_d1_preview")};
+                function readIds(key = KEY) {{
                     var ids = [];
                     try {{
-                        var raw = localStorage.getItem(KEY);
+                        var raw = localStorage.getItem(key);
                         if (raw) {{
                             var parsed = JSON.parse(raw);
                             if (Array.isArray(parsed)) {{
@@ -5317,6 +5318,18 @@ app_ui = ui.page_fluid(
                     }} catch (err) {{ ids = []; }}
                     return ids;
                 }}
+                function importPreviewSaves() {{
+                    if (!PREVIEW_KEY) return;
+                    try {{
+                        var marker = KEY + "_preview_imported";
+                        if (localStorage.getItem(marker)) return;
+                        var previewIds = readIds(PREVIEW_KEY);
+                        if (!previewIds.length) return;
+                        var ids = [...new Set([...readIds(), ...previewIds])];
+                        localStorage.setItem(KEY, JSON.stringify(ids));
+                        localStorage.setItem(marker, '1');
+                    }} catch (err) {{}}
+                }}
                 function writeIds(ids) {{
                     try {{
                         localStorage.setItem(KEY, JSON.stringify(ids));
@@ -5325,20 +5338,24 @@ app_ui = ui.page_fluid(
                 var lastSentIds = null;
                 function syncTritonTracker(force) {{
                     if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
+                    var app = window.Shiny.shinyapp;
+                    if (!app || (typeof app.isConnected === 'function' && !app.isConnected())) return;
+                    importPreviewSaves();
                     var ids = readIds();
                     var signature = JSON.stringify(ids);
                     if (!force && document.body.dataset.ucsdTritonTrackerRestored === '1' && signature === lastSentIds) return;
-                    document.body.dataset.ucsdTritonTrackerRestored = '1';
-                    lastSentIds = signature;
                     window.Shiny.setInputValue(
                         'triton_tracker_restore',
                         {{ids: ids, nonce: Date.now()}},
                         {{priority: 'event'}}
                     );
+                    document.body.dataset.ucsdTritonTrackerRestored = '1';
+                    lastSentIds = signature;
                 }}
                 window.ucsdSyncTritonTracker = syncTritonTracker;
                 window.ucsdToggleTritonTracker = function(id, button) {{
                     if (!id) return;
+                    importPreviewSaves();
                     var ids = readIds();
                     var idx = ids.indexOf(id);
                     var isTracked = idx === -1;
@@ -5515,6 +5532,7 @@ def server(input, output, session):
     watchlist_unavailable = reactive.Value(set())
     triton_tracker_ids = reactive.Value(set())
     triton_tracker_restored = reactive.Value(False)
+    triton_tracker_unavailable = reactive.Value(set())
     triton_tracker_visible_state = reactive.Value(False)
     radar_selected = reactive.Value([])
     radar_stat_selected = reactive.Value(DEFAULT_RADAR_STAT_KEYS)
@@ -5881,11 +5899,11 @@ def server(input, output, session):
     def _restore_triton_tracker():
         payload = input.triton_tracker_restore() or {}
         stored = payload.get("ids") or [] if isinstance(payload, dict) else []
-        restored = {
-            str(row_id).strip()
-            for row_id in stored
-            if historical_row_by_id(str(row_id).strip()) is not None
-        }
+        if not isinstance(stored, (list, tuple)):
+            stored = []
+        ids = {row_id.strip() for row_id in stored if isinstance(row_id, str) and row_id.strip()}
+        restored = {row_id for row_id in ids if historical_row_by_id(row_id) is not None}
+        triton_tracker_unavailable.set(ids - restored)
         triton_tracker_ids.set(restored)
         triton_tracker_restored.set(True)
 
@@ -5894,7 +5912,7 @@ def server(input, output, session):
     def triton_tracker_persist():
         if not triton_tracker_restored.get():
             return None
-        ids_json = json.dumps(sorted(triton_tracker_ids.get())).replace("</", "<\\/")
+        ids_json = json.dumps(sorted(triton_tracker_ids.get() | triton_tracker_unavailable.get())).replace("</", "<\\/")
         return ui.tags.script(f"""
         (function() {{
           try {{
