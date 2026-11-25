@@ -18,21 +18,22 @@ pipeline, the player forecast exporter, and the Ratings page.
   contain their Shiny layouts, styles, and page-specific data or scoring code.
   Shared UI, navigation, and reactive wiring live in `app.py`.
 
-#### Season preview
+#### Refreshing 2026–27 Division I data
 
-The Daily Division I preview snapshot workflow builds the 2026–27 CSV at
-6:30 a.m. Pacific once the workflow is on the default branch. It uploads raw
-inputs and the validated CSV as separate artifacts. Download the
-`division-i-2027-preview` artifact to `data/current/`, or build it locally
-from the repository root:
+The live dashboard loads `data/current/division-i-2027.csv`. The Daily
+Division I preview snapshot workflow runs at 6:30 a.m. Pacific and uploads
+raw inputs and the validated CSV as separate artifacts. To publish an update,
+replace the tracked CSV with the validated artifact or build it locally from
+the repository root. Then commit the CSV to trigger the GitHub Pages rebuild.
 
 ```sh
 python scripts/build_division_i_snapshot.py --season 2027
-D1_PREVIEW_SNAPSHOT=data/current/division-i-2027.csv shiny run app.py
+shiny run app.py
 ```
 
 For a reproducible rebuild, pass the two saved raw inputs with `--players`
-and `--shooting`. Triton Zone scores the shared snapshot in memory as staff
-adjust the thresholds. The preview uses Torvik player IDs and its own Watchlist
-and Tracker storage keys. Historical Players includes 2025–26 in this mode.
-Publishing to the public dashboard requires the production cutover.
+and `--shooting`. To test a separate file, set `D1_PREVIEW_SNAPSHOT` to its path
+before starting Shiny. Preview saves use separate browser storage.
+Historical Players includes 2025–26. When a season has no precomputed
+Historical Comps tables, current player cards rank archived players using
+the active Division I snapshot.

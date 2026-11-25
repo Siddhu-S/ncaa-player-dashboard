@@ -9,6 +9,7 @@ import html
 from html.parser import HTMLParser
 import json
 import re
+import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -129,8 +130,11 @@ def parse_on3_rivals(year: int, max_rank: int) -> list[dict]:
     player_data = first.get("props", {}).get("pageProps", {}).get("playerData", {})
     page_count = int(player_data.get("pagination", {}).get("pageCount", 1) or 1)
 
-    def add_page(page_data: dict, source_url: str) -> None:
-        for item in page_data.get("list", []):
+    def add_page(page_data: dict, source_url: str, page: int) -> None:
+        players = page_data.get("list", [])
+        if not players or page_data.get("pagination", {}).get("currentPage") != page:
+            raise ValueError(f"Missing or repeated Rivals ranking page {page}")
+        for item in players:
             person = item.get("person", {})
             rating = person.get("rating", {})
             rank = item.get("consensusOverallRank") or rating.get("consensusNationalRank")
@@ -163,12 +167,13 @@ def parse_on3_rivals(year: int, max_rank: int) -> list[dict]:
                 "source_url": source_url,
             })
 
-    add_page(player_data, base_url)
+    add_page(player_data, base_url, 1)
     for page in range(2, page_count + 1):
         url = f"{base_url}?page={page}"
         add_page(
             next_data(fetch_html(url)).get("props", {}).get("pageProps", {}).get("playerData", {}),
             url,
+            page,
         )
 
     rows = sorted(rows, key=lambda x: (x["class_year"], x["rank"], x["player"]))
@@ -179,7 +184,6 @@ def parse_247(year: int, max_rank: int) -> list[dict]:
     base_url = f"https://247sports.com/season/{year}-basketball/compositerecruitrankings/?InstitutionGroup=HighSchool"
     rows: list[dict] = []
     seen_profiles: set[str] = set()
-    rank = 1
 
     def page_url(page: int) -> str:
         if page == 1:
@@ -189,9 +193,15 @@ def parse_247(year: int, max_rank: int) -> list[dict]:
             f"?ViewPath=~%2FViews%2FSkyNet%2FPlayerSportRanking%2F_SimpleSetForSeason.ascx&Page={page}"
         )
 
+    expected = 0
     for page in range(1, 30):
         url = page_url(page)
-        _tokens, links = fetch_tokens(url)
+        tokens, links = fetch_tokens(url)
+        if page == 1:
+            heading = re.search(rf"\b{year} Top Basketball Recruits\s*\(([\d,]+)\)", " ".join(tokens))
+            if heading is None:
+                raise ValueError("247Sports did not return a rankings page")
+            expected = min(max_rank, int(heading[1].replace(",", "")))
         page_players = 0
         for player, href in links:
             href = html.unescape(href)
@@ -201,12 +211,12 @@ def parse_247(year: int, max_rank: int) -> list[dict]:
             href = absolute_url(href, url)
             if href in seen_profiles:
                 continue
-            if rank > max_rank:
+            if len(rows) == expected:
                 return rows
             rows.append({
                 "source": "247",
                 "class_year": year,
-                "rank": rank,
+                "rank": len(rows) + 1,
                 "player": player,
                 "position": "",
                 "rating": "",
@@ -218,41 +228,52 @@ def parse_247(year: int, max_rank: int) -> list[dict]:
             })
             seen_profiles.add(href)
             page_players += 1
-            rank += 1
-        if page_players == 0:
+        if len(rows) == expected or page_players == 0:
             break
+    if len(rows) != expected:
+        raise ValueError(f"247Sports returned {len(rows)} of {expected} ranked players")
     return rows
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--years", nargs="+", type=int, default=[2021, 2022, 2023, 2024, 2025, 2026])
+    parser.add_argument("--years", nargs="+", type=int, default=[datetime.now(timezone.utc).year])
     parser.add_argument("--output", default="recruiting_rankings_cache.csv")
     parser.add_argument("--audit-output", default="recruiting_rankings_audit.csv")
     parser.add_argument("--max-247-rank", type=int, default=500)
     parser.add_argument("--max-rivals-rank", type=int, default=300)
     args = parser.parse_args()
 
-    rows: list[dict] = []
-    for year in args.years:
-        rows.extend(parse_247(year, args.max_247_rank))
-        rows.extend(parse_on3_rivals(year, args.max_rivals_rank))
-
-    updated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    df = pd.DataFrame(rows)
-    if df.empty:
-        df = pd.DataFrame(columns=OUTPUT_COLUMNS)
-    else:
-        df["updated_at"] = updated_at
-        for col in OUTPUT_COLUMNS:
-            if col not in df.columns:
-                df[col] = ""
-        df = df[OUTPUT_COLUMNS].drop_duplicates(["source", "class_year", "rank", "player"])
-
     output = Path(args.output)
+    df = pd.read_csv(output, keep_default_na=False) if output.exists() else pd.DataFrame(columns=OUTPUT_COLUMNS)
+    updated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    refreshed = []
+    sources = [
+        ("247", parse_247, args.max_247_rank),
+        ("rivals_industry", parse_on3_rivals, args.max_rivals_rank),
+    ]
+    for year in dict.fromkeys(args.years):
+        for source, fetch, max_rank in sources:
+            try:
+                rows = fetch(year, max_rank)
+                if not rows or any(not row["player"].strip() for row in rows):
+                    raise ValueError("Source returned no valid ranking list")
+            except (OSError, ValueError) as exc:
+                print(f"Warning: {source} class {year}: {exc}. Kept any cached rankings.", file=sys.stderr)
+                continue
+            previous = df["class_year"].eq(year) & df["source"].eq(source)
+            df = df.loc[~previous]
+            refreshed.append(pd.DataFrame(rows).assign(updated_at=updated_at))
+            print(f"Refreshed {len(rows)} {source} rankings for the class of {year}")
+    if not refreshed:
+        raise SystemExit("No recruiting rankings were refreshed")
+
+    df = pd.concat([df, *refreshed], ignore_index=True)[OUTPUT_COLUMNS]
+    df = df.drop_duplicates(["source", "class_year", "rank", "player"])
+    df = df.sort_values(["class_year", "source", "rank", "player"], kind="stable")
+    audit = build_source_audit(df)
     output.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output, index=False)
-    audit = build_source_audit(df)
     audit_output = Path(args.audit_output)
     audit_output.parent.mkdir(parents=True, exist_ok=True)
     audit.to_csv(audit_output, index=False)

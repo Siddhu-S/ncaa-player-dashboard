@@ -19,7 +19,7 @@ STAT_HEADERS = {
     "stl": ("STL%", "Steals ÷ estimated opponent possessions while on court"),
     "blk": ("BLK%", "Blocks ÷ estimated opponent two-point attempts while on court"),
     "foul": ("PF/100", "Personal fouls per 100 estimated team possessions while on court"),
-    "personal_tov": ("TO%", "Turnovers ÷ estimated personal possessions (usage × on-court team possessions)"),
+    "personal_tov": ("Estimated TO%", "Turnovers ÷ estimated personal possessions (usage × on-court team possessions)"),
     "fga": ("FGA/100", "Field-goal attempts per 100 estimated team possessions while on court"),
     "fta": ("FTA/100", "Free-throw attempts per 100 estimated team possessions while on court"),
     "share": ("3PAr", "Three-point attempts ÷ all field-goal attempts, shown as a percentage"),

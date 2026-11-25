@@ -4,6 +4,7 @@ from shinywidgets import output_widget, render_widget
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
+from functools import lru_cache
 from os import environ
 from pathlib import Path
 import html
@@ -33,7 +34,8 @@ from ratings.projections.player_projections import lineup_forecast_payload
 
 HERE = Path(__file__).parent
 D1_PREVIEW_SNAPSHOT = environ.get("D1_PREVIEW_SNAPSHOT")
-D1_CURRENT_SEASON = 2027 if D1_PREVIEW_SNAPSHOT else 2026
+D1_CURRENT_SEASON = 2027
+D1_SNAPSHOT = D1_PREVIEW_SNAPSHOT or str(HERE / "data" / "current" / "division-i-2027.csv")
 D1_SEASON_LABEL = f"{D1_CURRENT_SEASON - 1}–{D1_CURRENT_SEASON % 100:02}"
 BUNDLED_CURRENT_D2_SCHEMA_PATH = HERE / "current_d2_all_players_10mpg_dashboard_schema.csv"
 D2_SCHEMA_RELATIVE_PATH = (
@@ -87,7 +89,7 @@ D2 = load_data(
     id_prefix="d2p",
     min_mpg=10,
 )
-D1 = load_division_i(HERE, snapshot=D1_PREVIEW_SNAPSHOT, season=D1_CURRENT_SEASON)
+D1 = load_division_i(HERE, snapshot=D1_SNAPSHOT, season=D1_CURRENT_SEASON)
 D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
 HISTORICAL_NEIGHBORS = {
     "all": load_historical_neighbors(D1_CURRENT_SEASON, "all"),
@@ -348,7 +350,7 @@ def add_archetype_v2_columns(df):
             frame["archetype_v2_stability_note"] = pd.Series(pd.NA, index=frame.index, dtype="object")
         return frame
 
-    if D1_PREVIEW_SNAPSHOT:
+    if D1.get("retrieved_at") is not None:
         current = finalize_membership_frame(score_current_players(df))
         for col in target_columns:
             df[col] = current[col].reindex(df.index)
@@ -1590,7 +1592,7 @@ def _similarity_model_series(stat_key: str, values) -> pd.Series:
     return numeric
 
 
-def _build_current_similarity_norms(pool: pd.DataFrame) -> dict:
+def _build_similarity_norms(pool: pd.DataFrame) -> dict:
     stat_keys = {
         stat_key
         for stat_weights in SIMILARITY_TIER_STAT_WEIGHTS.values()
@@ -1612,7 +1614,7 @@ def _build_current_similarity_norms(pool: pd.DataFrame) -> dict:
     return norms
 
 
-def _apply_tier_similarity_distance(row, pool):
+def _apply_tier_similarity_distance(row, pool, norms):
     working = pool.copy()
     working["historical_distance"] = np.nan
     working["historical_shared_stats"] = 0
@@ -1630,7 +1632,7 @@ def _apply_tier_similarity_distance(row, pool):
             source_value = _similarity_model_value(stat_key, row.get(stat_key))
             if not np.isfinite(source_value):
                 continue
-            norm = HISTORICAL_CURRENT_SIMILARITY_NORMS.get(stat_key, {})
+            norm = norms.get(stat_key, {})
             mean = norm.get("mean", np.nan)
             std = norm.get("std", np.nan)
             pool_z_col = norm.get("z")
@@ -1664,10 +1666,9 @@ def _apply_tier_similarity_distance(row, pool):
         overlap_weight = weighted_overlap.sum(axis=1)
         diffs = pool_z - source_z
         weighted_sq = np.where(overlap, np.square(diffs) * tier_weights, 0.0).sum(axis=1)
-        tier_distance = np.where(
-            overlap_weight > 0,
-            np.sqrt(weighted_sq / overlap_weight),
-            np.nan,
+        tier_distance = np.sqrt(
+            np.divide(weighted_sq, overlap_weight, out=np.full_like(weighted_sq, np.nan),
+                      where=overlap_weight > 0)
         )
         distance_col = f"{tier_key}_tier_distance"
         working[distance_col] = tier_distance
@@ -1706,7 +1707,7 @@ def _current_compare_profile_from_row(row):
 
 
 HISTORICAL_CURRENT_POOL = build_historical_current_pool()
-HISTORICAL_CURRENT_SIMILARITY_NORMS = _build_current_similarity_norms(HISTORICAL_CURRENT_POOL)
+HISTORICAL_CURRENT_SIMILARITY_NORMS = _build_similarity_norms(HISTORICAL_CURRENT_POOL)
 def _profile_from_neighbor_payload(payload, prefix: str, player_id: str = "", subtitle: str = "", year: int | None = None):
     profile = {
         "player_name": str(payload.get(f"{prefix}_name", "")).strip(),
@@ -2016,7 +2017,7 @@ def historical_current_comps_for_player(
     if pool.empty:
         return []
 
-    pool = _apply_tier_similarity_distance(row, pool)
+    pool = _apply_tier_similarity_distance(row, pool, HISTORICAL_CURRENT_SIMILARITY_NORMS)
     if pool.empty:
         return []
 
@@ -2237,10 +2238,78 @@ def make_similarity_compare_modal(
     )
 
 
+@lru_cache(maxsize=1)
+def historical_comp_archive():
+    archive = HISTORICAL_PLAYER_INDEX
+    if archive.empty:
+        return archive, {}, {}
+    # Use the same minimum sample as the precomputed historical neighbor tables.
+    eligible = archive.loc[archive["GP"].ge(5) & archive["mins_per_game"].ge(5)].copy()
+    eligible["name_key"] = eligible["player_name"].map(normalize_lookup_key)
+    big_west = {}
+    for _, player in eligible.loc[eligible["conf"].eq("BW")].sort_values(
+        ["GP", "mins_per_game"], ascending=False, kind="stable"
+    ).iterrows():
+        big_west.setdefault((player["name_key"], int(player["year"])), player)
+    current_big_west = HISTORICAL_CURRENT_POOL.loc[
+        HISTORICAL_CURRENT_POOL["conf"].eq("BW")
+        & HISTORICAL_CURRENT_POOL["gp"].ge(5)
+        & HISTORICAL_CURRENT_POOL["mpg"].ge(5)
+    ].sort_values(["gp", "mpg"], ascending=False, kind="stable")
+    for _, player in current_big_west.iterrows():
+        profile = _current_compare_profile_from_row(player)
+        profile["conf"] = player["conf"]
+        big_west.setdefault((player["name_key"], D1_CURRENT_SEASON), profile)
+    return eligible, _build_similarity_norms(eligible), big_west
+
+
+def snapshot_historical_comps(row, n_comp, pool_key):
+    archive, norms, big_west = historical_comp_archive()
+    if archive.empty:
+        return []
+    source = _current_compare_profile_from_row(row)
+    candidates = archive.loc[archive["name_key"].ne(normalize_lookup_key(source["player_name"]))]
+    if pool_key == "big_west_next_year":
+        next_keys = zip(candidates["name_key"], candidates["year"] + 1)
+        candidates = candidates.loc[[key in big_west for key in next_keys]]
+    if candidates.empty:
+        return []
+    matches = _apply_tier_similarity_distance(source, candidates, norms)
+    if matches.empty:
+        return []
+    matches = matches.sort_values(
+        ["historical_distance", "historical_shared_stats", "mins_per_game", "season_player_id"],
+        ascending=[True, False, False, True],
+    ).head(n_comp)
+    comps = []
+    for rank, (_, match) in enumerate(matches.iterrows(), start=1):
+        result = {
+            "rank": rank, "name": match["player_name"], "team": match["team"],
+            "season": int(match["year"]), "conf": match["conf"],
+            "distance": float(match["historical_distance"]),
+        }
+        profiles = {"target": source, "match": match}
+        if pool_key == "big_west_next_year":
+            following = big_west[(match["name_key"], int(match["year"]) + 1)]
+            result.update(
+                next_name=following["player_name"], next_team=following["team"],
+                next_season=int(following["year"]), next_conf=following["conf"],
+            )
+            profiles["next"] = following
+        for prefix, profile in profiles.items():
+            for _, _, stats in SIMILARITY_COMPARE_CATEGORIES:
+                for stat_key, _ in stats:
+                    result[f"{prefix}_{stat_key}"] = _as_float(profile.get(stat_key))
+            for grade_key in HISTORICAL_COMPARE_GRADE_COLUMNS:
+                result[f"{prefix}_{grade_key}"] = _as_float(profile.get(grade_key))
+        comps.append(result)
+    return comps
+
+
 def historical_comps_for_player(row, n_comp: int = 5, pool_key: str = "all"):
     neighbors_df = HISTORICAL_NEIGHBORS.get(pool_key, HISTORICAL_NEIGHBORS["all"])
     if neighbors_df.empty:
-        return []
+        return snapshot_historical_comps(row, n_comp, pool_key)
     matches = neighbors_df[
         neighbors_df["target_player_name"].eq(str(row["name"]).strip())
         & neighbors_df["target_team"].eq(str(row["team"]).strip())
@@ -2307,7 +2376,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     sims = similar_to_fn(player_id, n_sim=5, metric=similarity_metric)
     historical_comps = (
         historical_comps_for_player(row, pool_key=historical_pool)
-        if division_label == "D-I"
+        if division_label == "D-I" and similarity_view == "historical"
         else []
     )
     pc   = ARCHETYPE_COLOR.get(row["primary_archetype"], POS_COLOR.get(row["pos"], "#888"))
@@ -3032,6 +3101,24 @@ if D1_PREVIEW_SNAPSHOT:
     TRITON_TRACKER_STORAGE_KEY += "_d1_preview"
 
 
+@lru_cache(maxsize=1)
+def legacy_division_i_watchlist_ids():
+    previous = pd.read_csv(
+        HERE / "mbb_with_pca_all_players_2026_with_pbp.csv",
+        usecols=["player_name", "pbp_pid", "pbp_join_method", "pbp_join_warning"],
+    )
+    # Legacy watchlist IDs were row positions after blank names were removed.
+    previous = previous.loc[previous["player_name"].fillna("").str.strip().ne("")].reset_index(drop=True)
+    ids = pd.to_numeric(previous["pbp_pid"], errors="coerce")
+    verified = (
+        previous["pbp_join_method"].eq("pid")
+        & previous["pbp_join_warning"].fillna("").str.strip().eq("")
+        & ids.gt(0)
+        & ids.mod(1).eq(0)
+    )
+    return {f"d1p{index}": f"d1ptorvik-{int(pid)}" for index, pid in ids[verified].items()}
+
+
 def watchlist_rows(player_ids):
     rows = []
     for pid in player_ids:
@@ -3400,7 +3487,7 @@ def make_sidebar(prefix, df, conferences):
     return ui.div(
         {"class": "sidebar"},
         ui.div("Filters", class_="sb-title"),
-        snapshot_note(D1["retrieved_at"]) if prefix == "d1" and D1_PREVIEW_SNAPSHOT else None,
+        snapshot_note(D1["retrieved_at"]) if prefix == "d1" else None,
         low_sample_toggle,
         ui.div(ui.div("Search by name", class_="sb-section-head"),
                ui.input_text(f"{prefix}_q", None, placeholder="e.g. Marcus Jackson"),
@@ -5425,6 +5512,7 @@ def server(input, output, session):
     # Flipped once the browser has handed back its stored watchlist, so the
     # empty starting set is never written over what was already saved.
     watchlist_restored = reactive.Value(False)
+    watchlist_unavailable = reactive.Value(set())
     triton_tracker_ids = reactive.Value(set())
     triton_tracker_restored = reactive.Value(False)
     triton_tracker_visible_state = reactive.Value(False)
@@ -5762,9 +5850,13 @@ def server(input, output, session):
         stored = payload.get("ids") if isinstance(payload, dict) else None
         if not isinstance(stored, (list, tuple)):
             stored = []
-        # Rosters change between data refreshes; drop ids that no longer
-        # resolve to a player rather than carrying dead cards forward.
+        legacy_ids = {} if D1_PREVIEW_SNAPSHOT else legacy_division_i_watchlist_ids()
+        stored = {legacy_ids.get(pid, pid) for pid in stored if isinstance(pid, str)}
         restored = {pid for pid, *_ in watchlist_rows(stored)}
+        # Keep Division I saves that can reappear in a later snapshot.
+        watchlist_unavailable.set({
+            pid for pid in stored - restored if re.fullmatch(r"d1p(?:torvik-)?\d+", pid)
+        })
         watchlist.set(restored)
         sync_radar_selection(restored)
         watchlist_restored.set(True)
@@ -5774,7 +5866,7 @@ def server(input, output, session):
     def watchlist_persist():
         if not watchlist_restored.get():
             return None
-        ids_json = json.dumps(sorted(watchlist.get())).replace("</", "<\\/")
+        ids_json = json.dumps(sorted(watchlist.get() | watchlist_unavailable.get())).replace("</", "<\\/")
         return ui.tags.script(f"""
         (function() {{
           try {{
