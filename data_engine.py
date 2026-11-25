@@ -54,13 +54,13 @@ RECRUITING_COLUMNS = [
     "recruiting_summary",
 ]
 
-CLASS_TO_RECRUIT_YEAR = {
-    "FR": 2025,
-    "SO": 2024,
-    "JR": 2023,
-    "SR": 2022,
-    "GR": 2021,
-    "R": 2025,
+CLASS_YEARS_SINCE_RECRUITMENT = {
+    "FR": 0,
+    "SO": 1,
+    "JR": 2,
+    "SR": 3,
+    "GR": 4,
+    "R": 0,
 }
 
 RECRUITING_ALIAS_GROUPS = [
@@ -302,14 +302,17 @@ def _empty_recruiting_frame(index) -> pd.DataFrame:
     return out
 
 
-def _candidate_recruit_years(cls: str) -> set[int]:
-    base = CLASS_TO_RECRUIT_YEAR.get(cls)
-    if base is None:
+def _candidate_recruit_years(cls: str, season_end_year: int) -> set[int]:
+    years_since_recruitment = CLASS_YEARS_SINCE_RECRUITMENT.get(cls)
+    if years_since_recruitment is None:
         return set()
+    base = season_end_year - 1 - years_since_recruitment
     return {base - 1, base, base + 1}
 
 
-def _load_recruiting_tags(recruiting_path: str | None, raw: pd.DataFrame) -> pd.DataFrame:
+def _load_recruiting_tags(
+    recruiting_path: str | None, raw: pd.DataFrame, *, season_end_year: int
+) -> pd.DataFrame:
     tags = _empty_recruiting_frame(raw.index)
     if not recruiting_path:
         return tags
@@ -347,7 +350,7 @@ def _load_recruiting_tags(recruiting_path: str | None, raw: pd.DataFrame) -> pd.
             ["source", "class_year", "rank", "player"]
         )
 
-        years = _candidate_recruit_years(row["_class"])
+        years = _candidate_recruit_years(row["_class"], season_end_year)
         if years:
             year_matches = matches[matches["class_year"].isin(years)]
             if year_matches.empty:
@@ -576,7 +579,7 @@ def load_data(csv_path: str, id_prefix: str = "d2p", min_mpg: float | None = Non
 #   - 3P_pct, FT_pct are 0-1 scale →  keep as-is
 #   - usg is 0-100 scale           →  divide by 100
 #   - PCs are arch_PC1/2/3 + val_PC1 (four components, different names)
-#   - No FG% column; use eFG/100 as proxy (best available overall shooting %)
+#   - Compute FG% from the combined two- and three-point makes and attempts
 
 def load_d1_data(
     csv_path: str,
@@ -665,7 +668,9 @@ def load_d1_data(
     # Shooting percentages — D-I has mixed scales:
     #   eFG, TS_pct  → 0-100  →  /100
     #   3P_pct, FT_pct → 0-1  →  keep
-    df["fg"]  = n("eFG") / 100.0        # best proxy for overall FG; eFG scaled 0-100
+    fg_made = n("2PM") + n("3PM")
+    fg_attempted = n("2PA") + n("3PA")
+    df["fg"]  = (fg_made / fg_attempted.where(fg_attempted.gt(0))).fillna(0)
     df["two_pct"] = n("2P_pct")          # already 0-1
     df["tp"]  = n("3P_pct")             # already 0-1
     df["ft"]  = n("FT_pct")             # already 0-1
@@ -755,7 +760,9 @@ def load_d1_data(
 
     for col, values in _load_transfer_tags(transfer_path, raw).items():
         df[col] = values
-    for col, values in _load_recruiting_tags(recruiting_path, raw).items():
+    for col, values in _load_recruiting_tags(
+        recruiting_path, raw, season_end_year=snapshot_season or 2026
+    ).items():
         df[col] = values
 
     output = _build_output(df, id_prefix)

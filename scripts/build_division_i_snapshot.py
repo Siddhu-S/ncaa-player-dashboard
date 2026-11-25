@@ -215,7 +215,7 @@ def publish_snapshot(rows, destination):
     try:
         with handle:
             fields = RAW_HEADERS + DERIVED_HEADERS + ["pbp_join_method", "pbp_join_warning"] + PBP_HEADERS
-            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
         temporary.replace(destination)

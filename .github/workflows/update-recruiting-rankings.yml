@@ -2,8 +2,14 @@ name: Update recruiting rankings cache
 
 on:
   schedule:
-    - cron: "35 11 * * 1"
+    - cron: "35 6 1 10 *"
+      timezone: America/Los_Angeles
   workflow_dispatch:
+    inputs:
+      class_year:
+        description: Recruiting class to refresh (defaults to the current year)
+        type: string
+        required: false
 
 permissions:
   contents: write
@@ -17,7 +23,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install pandas
-      - run: python scripts/update_recruiting_rankings.py --output recruiting_rankings_cache.csv --audit-output recruiting_rankings_audit.csv
+      - name: Refresh the recruiting class
+        env:
+          RECRUITING_CLASS_YEAR: ${{ inputs.class_year }}
+        run: |
+          args=()
+          if [[ -n "$RECRUITING_CLASS_YEAR" ]]; then
+            args+=(--years "$RECRUITING_CLASS_YEAR")
+          fi
+          python scripts/update_recruiting_rankings.py "${args[@]}"
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Update recruiting rankings cache"
