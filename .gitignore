@@ -1,3 +1,6 @@
 __pycache__/
 *.py[cod]
 .DS_Store
+/data/current/*
+!/data/current/division-i-2027.csv
+/data/raw/

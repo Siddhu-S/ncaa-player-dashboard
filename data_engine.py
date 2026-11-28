@@ -54,13 +54,13 @@ RECRUITING_COLUMNS = [
     "recruiting_summary",
 ]
 
-CLASS_TO_RECRUIT_YEAR = {
-    "FR": 2025,
-    "SO": 2024,
-    "JR": 2023,
-    "SR": 2022,
-    "GR": 2021,
-    "R": 2025,
+CLASS_YEARS_SINCE_RECRUITMENT = {
+    "FR": 0,
+    "SO": 1,
+    "JR": 2,
+    "SR": 3,
+    "GR": 4,
+    "R": 0,
 }
 
 RECRUITING_ALIAS_GROUPS = [
@@ -302,14 +302,17 @@ def _empty_recruiting_frame(index) -> pd.DataFrame:
     return out
 
 
-def _candidate_recruit_years(cls: str) -> set[int]:
-    base = CLASS_TO_RECRUIT_YEAR.get(cls)
-    if base is None:
+def _candidate_recruit_years(cls: str, season_end_year: int) -> set[int]:
+    years_since_recruitment = CLASS_YEARS_SINCE_RECRUITMENT.get(cls)
+    if years_since_recruitment is None:
         return set()
+    base = season_end_year - 1 - years_since_recruitment
     return {base - 1, base, base + 1}
 
 
-def _load_recruiting_tags(recruiting_path: str | None, raw: pd.DataFrame) -> pd.DataFrame:
+def _load_recruiting_tags(
+    recruiting_path: str | None, raw: pd.DataFrame, *, season_end_year: int
+) -> pd.DataFrame:
     tags = _empty_recruiting_frame(raw.index)
     if not recruiting_path:
         return tags
@@ -347,7 +350,7 @@ def _load_recruiting_tags(recruiting_path: str | None, raw: pd.DataFrame) -> pd.
             ["source", "class_year", "rank", "player"]
         )
 
-        years = _candidate_recruit_years(row["_class"])
+        years = _candidate_recruit_years(row["_class"], season_end_year)
         if years:
             year_matches = matches[matches["class_year"].isin(years)]
             if year_matches.empty:
@@ -388,7 +391,8 @@ def _build_output(df: pd.DataFrame, id_prefix: str) -> dict:
     Called by both loaders after they've normalised column names.
     """
     df = df[df["name"].str.len() > 0].copy().reset_index(drop=True)
-    df["id"] = [id_prefix + str(i) for i in range(len(df))]
+    if "id" not in df:
+        df["id"] = [id_prefix + str(i) for i in range(len(df))]
 
     # ── Similarity setup ─────────────────────────────────────────
 
@@ -575,20 +579,21 @@ def load_data(csv_path: str, id_prefix: str = "d2p", min_mpg: float | None = Non
 #   - 3P_pct, FT_pct are 0-1 scale →  keep as-is
 #   - usg is 0-100 scale           →  divide by 100
 #   - PCs are arch_PC1/2/3 + val_PC1 (four components, different names)
-#   - No FG% column; use eFG/100 as proxy (best available overall shooting %)
+#   - Compute FG% from the combined two- and three-point makes and attempts
 
 def load_d1_data(
     csv_path: str,
     id_prefix: str = "d1p",
     transfer_path: str | None = None,
     recruiting_path: str | None = None,
+    snapshot_season: int | None = None,
 ) -> dict:
     """
     Load D-I dataset (mbb_with_pca.csv).
     Remaps column names and rescales percentages to match the shared schema
     expected by app.py helpers.
     """
-    raw = pd.read_csv(csv_path)
+    raw = pd.read_csv(csv_path, dtype={"pid": str})
 
     def n(col):
         return pd.to_numeric(raw.get(col, 0), errors="coerce").fillna(0)
@@ -601,8 +606,19 @@ def load_d1_data(
     # Identity
     df["name"]     = t("player_name")
     df["team"]     = t("team")
+    if snapshot_season is not None:
+        if not t("year").eq(str(snapshot_season)).all():
+            raise ValueError(f"Division I snapshot must contain only season {snapshot_season}")
+        player_ids = t("pid")
+        if not player_ids.str.fullmatch(r"\d+").all() or player_ids.duplicated().any():
+            raise ValueError("Division I snapshot requires unique Torvik player IDs")
+        df["id"] = id_prefix + "torvik-" + player_ids
     df["conf"]     = t("conf")
     df["confName"] = df["conf"].map(D1_CONF_NAMES).fillna(df["conf"])
+    if {"pbp_pid", "pbp_join_method", "pbp_join_warning"}.issubset(raw.columns):
+        pbp_id = pd.to_numeric(raw["pbp_pid"], errors="coerce")
+        verified_id = t("pbp_join_method").eq("pid") & t("pbp_join_warning").eq("")
+        df["torvik_player_id"] = pbp_id.where(verified_id).astype("Int64")
 
     # Position — map role to 5-category system
     df["pos"] = t("role").map(D1_ROLE_MAP).fillna("G")
@@ -636,6 +652,12 @@ def load_d1_data(
     df["ast_per_40"] = (df["apg"] * pace_to_40).fillna(0)
     df["stl_per_40"] = (df["spg"] * pace_to_40).fillna(0)
     df["blk_per_40"] = (df["bpg"] * pace_to_40).fillna(0)
+    total_minutes = df["gp"] * df["mpg"]
+    df["stops_per_40"] = np.where(
+        total_minutes > 0,
+        n("stops") * 40.0 / total_minutes.replace(0, np.nan),
+        np.nan,
+    )
 
     # Assist-to-turnover (raw tov col is TOV_per_24; use AST_TOV ratio directly)
     df["ast_tov"] = n("AST_TOV")
@@ -646,7 +668,9 @@ def load_d1_data(
     # Shooting percentages — D-I has mixed scales:
     #   eFG, TS_pct  → 0-100  →  /100
     #   3P_pct, FT_pct → 0-1  →  keep
-    df["fg"]  = n("eFG") / 100.0        # best proxy for overall FG; eFG scaled 0-100
+    fg_made = n("2PM") + n("3PM")
+    fg_attempted = n("2PA") + n("3PA")
+    df["fg"]  = (fg_made / fg_attempted.where(fg_attempted.gt(0))).fillna(0)
     df["two_pct"] = n("2P_pct")          # already 0-1
     df["tp"]  = n("3P_pct")             # already 0-1
     df["ft"]  = n("FT_pct")             # already 0-1
@@ -662,6 +686,7 @@ def load_d1_data(
 
     # Usage — 0-100 in D-I → /100 for consiwaistency with D-II (both end up ~0.19 mean)
     df["usg"] = n("usg") / 100.0
+    df["3P_per_100_team_pos"] = n("3P_per_100_team_pos")
 
     # 3P share — already 0-1
     df["three_share"] = n("three_share")
@@ -679,7 +704,10 @@ def load_d1_data(
     df["PC4"] = n("val_PC1")
 
     df["bpm"] = n("bpm")
+    df["obpm"] = n("obpm")
+    df["dbpm"] = n("dbpm")
     df["porpag"] = n("PORPAG")
+    df["adj_drtg"] = n("adj_drtg")
 
     # Low-sample flag for default D-I filtering and player detail warnings.
     df["low_sample_size"] = (df["mpg"] < 10) | (df["gp"] < 5)
@@ -689,6 +717,9 @@ def load_d1_data(
     df["mid_share"] = n("mid_share")
     df["rim_fg_pct"] = n("rim_pct")
     df["mid_fg_pct"] = n("mid_pct")
+    total_known_fga = n("total_known_fga").replace(0, np.nan)
+    df["dunk_share"] = (n("dunks_attempts") / total_known_fga).replace([np.inf, -np.inf], np.nan).fillna(0).clip(0, 1)
+    df["dunk_pct"] = n("dunk_pct").clip(0, 1)
 
     # PBP zone counts.
     df["pbp_rim_made"] = n("pbp_rim_made")
@@ -729,7 +760,15 @@ def load_d1_data(
 
     for col, values in _load_transfer_tags(transfer_path, raw).items():
         df[col] = values
-    for col, values in _load_recruiting_tags(recruiting_path, raw).items():
+    for col, values in _load_recruiting_tags(
+        recruiting_path, raw, season_end_year=snapshot_season or 2026
+    ).items():
         df[col] = values
 
-    return _build_output(df, id_prefix)
+    output = _build_output(df, id_prefix)
+    if snapshot_season is not None:
+        timestamps = t("snapshot_retrieved_at").unique()
+        if len(timestamps) != 1 or not timestamps[0]:
+            raise ValueError("Division I snapshot requires a single retrieval timestamp")
+        output["retrieved_at"] = pd.to_datetime(timestamps[0], utc=True)
+    return output
